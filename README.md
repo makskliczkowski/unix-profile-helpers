@@ -170,36 +170,64 @@ Security and transparency are prioritized in these profile configs:
 
 ## Command & Helper Description
 
-Here is a thorough description of the custom commands and aliases defined in these helper profiles:
+Here is a thorough description of all available custom commands, shortcuts, and functions defined across these helper profiles:
 
-### 1. General & Navigation Helpers (Local)
+### 1. General & Navigation Helpers (Local Zsh)
 
-- `mkhelp`: The central reference manager. Typing `mkhelp` prints a reference card showing all active shell plugins, loaded totals, and custom aliases with clear descriptions.
-- `rscp [--rm] <src> <dst>`: A safe `rsync` mover and copier. By default, it acts as a copy command with high-performance real-time progress indicators. Adding the `--rm` flag converts the command into a robust move, safely cleaning empty folders after completion.
-- `extract <file>`: A universal archive extractor. Easily extracts `.zip`, `.tar.gz`, `.xz`, `.7z`, `.rar`, and more, without needing to remember distinct command flags.
-- `mkcd <dir>`: Creates a directory and immediately navigates into it.
-- `condastat` / `juliastat`: Rapid diagnosis tools showing active Conda environments and active Julia versions.
-- `armacmp filename.cpp`: Automatically compiles C++ files linked with your local Armadillo linear algebra headers using highly optimized flags (`-O3`).
+- **`mkhelp [all]`**: The central configuration reference center. Running `mkhelp` prints a clean, colorized reference dashboard showing all active shell plugins, loaded totals, and custom aliases with descriptions. Passing the `all` flag prints the full inventory of all active aliases and functions inside the current shell.
+- **`reloadzsh`**: Shorthand for `exec zsh`, which fully reloads your current shell environment without losing your terminal session.
+- **`cls`**: Clears the terminal screen (`clear`).
+- **`path`**: Prints each directory in your current `$PATH` environment variable on a new line for easy inspection.
+- **`mkdirp`**: Shorthand for `mkdir -p` (creates parent directories if needed).
+- **`..` / `...` / `....`**: Quick navigation helpers to jump up one, two, or three parent directory levels respectively.
+- **`zshconfig`**: Opens your main shell configuration file (`~/.zshrc`) in a text editor (default: TextMate/`mate`).
+- **`ohmyzsh`**: Opens the Oh My Zsh configuration directory (`~/.oh-my-zsh`) in a text editor.
+- **`mkobsidian`**: Instantly jumps (`cd`) to your active Obsidian notebook vault (defaults to `PhysicsNotes` in iCloud).
+- **`mkcontext`**: Directly opens the shared local configurations file (`~/.config/zsh/common-aliases.zsh`) for quick edits.
+- **`codes`**: Jumps directly to your local projects workspace folder (`~/Codes`).
+- **`pyqusolver`**: Shortcut to navigate directly to `~/Codes/QuantumEigenSolver/pyqusolver`.
+- **`qesgen`**: Shortcut to navigate directly to the general Python QES folder `~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python`.
+- **`l` / `ll` / `la`**: Directory list helpers. Uses `eza` (sorting folders first, adding Git status metrics for `ll`, and showing hidden files with `la`) when available, and falls back to standard `ls` flags if missing.
+- **`cat`**: Automatically overrides `cat` to run `bat --paging=never` to provide beautiful syntax highlighting in the terminal when available.
+- **`grep`**: Automatically overrides `grep` to run high-performance `rg` (ripgrep) when available.
+- **`mkcd <dir>`**: Creates a new directory and immediately navigates inside it in a single step.
+- **`rscp [--rm] [-p PORT] <src> <dst>`**: A highly robust `rsync` copier/mover wrapper. By default, it operates as a copy command with real-time transfer progress, absolute space safety, and SSH port controls. Adding the `--rm` flag converts it into a secure file move that automatically sweeps and deletes empty source directories upon successful transfer.
+- **`extract <file>`**: A smart archive extractor. Detects extensions like `.zip`, `.tar.gz`, `.xz`, `.7z`, `.rar`, etc., and automatically runs the appropriate decompression binary with the correct flags.
 
-### 2. Obsidian note-taking commands (Local)
+### 2. Scientific Development & Language Helpers (Local Zsh)
 
-- `obsearch "query"`: Searches inside your iCloud PhysicsNotes note journal using `ripgrep` directly from the shell terminal.
-- `obnew "note-title"`: Instantly creates a scientific markdown note in your vault with a pre-configured YAML frontmatter metadata block (title, timestamp, tagging structure) and opens it in your default markdown viewer.
+- **`condastat`**: Instantly prints the name of the currently active Anaconda environment in green, along with its active Python version.
+- **`juliastat`**: Instantly prints the active Julia compiler version in blue.
+- **`armacmp <file.cpp>`**: Automates compilation of C++ files linked to your local Armadillo linear algebra headers. Compiles using highly-optimized flags (`-O3 -std=c++17 -larmadillo`) and prints the compilation status.
 
-### 3. Local HPC management (Local)
+### 3. Obsidian Note-Taking Integration (Local macOS)
 
-- `slog`: Locally scans for the latest Slurm log (`slurm-*.out`) in the current directory and tails its output.
-- `qessync`: High-level sync shortcut that pushes your local Python solver solver folder up to the cluster.
-- `hpclogin`: Instant SSH connection shortcut to your cluster console.
+- **`obsearch "query"`**: Searches through your entire iCloud scientific journal notes (under `PhysicsNotes`) using `ripgrep` directly from the shell terminal, highlighting matches in context.
+- **`obnew "note-title"`**: Instantly creates a scientific markdown note in your vault with a pre-configured YAML metadata frontmatter block (title, tags, timestamp) and opens it in your default markdown editor (`mate` or `open`).
 
-### 4. Slurm & Remote HPC tools (Remote Cluster)
+### 4. Local HPC & Remote Syncing (Local Zsh)
 
-- `sq`: Color-coded Slurm queue utility. Shows only your running/pending jobs, coloring them dynamically so you see immediately what is running (Green) or pending (Yellow).
-- `salloc_quick <cores> <time>`: Grab a computing node on the fly for interactive testing (keeps login nodes from slowing down).
-- `jobeff <job_id>`: Check CPU and RAM resource efficiency for completed jobs to prevent over-allocation.
-- `jobtop <job_id>`: Interactively runs `htop` inside your running job node.
-- `mkscratch`: Jumps directly to high-speed scratch spaces (Lustre/Parallel, e.g., `/scratch/$USER` or `/work/$USER`), creates the folder structure if needed, and sets up a symlink (`~/scratch`) in your home folder for quick navigation.
-- `modload_science`: Clean environment purge and loading of standard GCC, MPI, Python configurations.
+- **`slog`**: Scans the current directory on your local machine for the latest Slurm log (`slurm-*.out`) and tails it (perfect when mounting cluster workspaces locally).
+- **`hpc-sync-to <local_src> <remote_dst>`**: Push scientific codes or datasets to a remote supercomputer path utilizing the highly secure, resume-capable `rscp` wrapper.
+- **`qessync`**: High-level shortcut that pushes your local `QuantumEigenSolver` codebase to the cluster workspace.
+- **`hpclogin`**: Quick-access shortcut to launch a secure SSH console connection to your configured remote supercomputer (`hpc-cluster`).
+
+### 5. Slurm & Remote HPC Tools (Remote Cluster)
+
+- **`sq`**: Vibrant, color-coded Slurm job queue dashboard. Displays your active/pending jobs, color-coding running jobs in **vibrant Green**, pending/queueing jobs in **vibrant Yellow**, and completing/cancelling jobs in **Red**.
+- **`sqall`**: Displays the active Slurm job queue for all users on the supercomputer partition.
+- **`sinfo_avail`**: Displays current cluster partition status, node counts, and overall load statistics.
+- **`jobeff <job_id>`**: Evaluates CPU and memory resource efficiency for completed jobs (uses `seff` or falls back to custom-formatted `sacct` fields) to prevent over-allocation of resources.
+- **`jobtop <job_id>`**: Interactively runs `htop` inside your running Slurm job node for real-time memory and CPU thread profiling.
+- **`salloc_quick [cores] [walltime] [partition]`**: Grab a computing node on the fly for interactive debugging (avoids slowing down cluster login nodes). Defaults to `4` cores and `2` hours if unspecified.
+- **`scanc <job_id>`**: Shorthand to cancel a specific Slurm job.
+- **`scancall`**: Immediately cancels all of your active and pending Slurm jobs.
+- **`slog`**: Tails the latest `slurm-*.out` log file generated in the remote directory.
+- **`mkscratch`**: Automatically locates cluster high-speed parallel scratch storage space (e.g., Lustre/GPFS under `/scratch/$USER` or `/work/$USER`), creates the user workspace if needed, and deploys a symbolic link (`~/scratch`) in your home folder for instant navigation.
+- **`myquota`**: Rapidly displays home directory disk utilization and Lustre filesystem quotas.
+- **`modlist`**: Quick shorthand for `module list` to view active environment configurations.
+- **`modload_science`**: Performs a clean system environment purge and automatically loads a standard GCC, OpenMPI, Python, and Julia scientific computing stack.
+- **`tmux_guard`**: A protective background daemon that automatically advises attaching `tmux` on cluster login sessions to safeguard against connection dropouts.
 
 ---
 
