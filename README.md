@@ -174,25 +174,25 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 
 ### 1. General & Navigation Helpers (Local Zsh)
 
-- **`mkhelp [all]`**: The central configuration reference center. Running `mkhelp` prints a clean, colorized reference dashboard showing all active shell plugins, loaded totals, and custom aliases with descriptions. Passing the `all` flag prints the full inventory of all active aliases and functions inside the current shell.
-- **`reloadzsh`**: Shorthand for `exec zsh`, which fully reloads your current shell environment without losing your terminal session.
 - **`cls`**: Clears the terminal screen (`clear`).
-- **`path`**: Prints each directory in your current `$PATH` environment variable on a new line for easy inspection.
-- **`mkdirp`**: Shorthand for `mkdir -p` (creates parent directories if needed).
-- **`..` / `...` / `....`**: Quick navigation helpers to jump up one, two, or three parent directory levels respectively.
-- **`zshconfig`**: Opens your main shell configuration file (`~/.zshrc`) in a text editor (default: TextMate/`mate`).
-- **`ohmyzsh`**: Opens the Oh My Zsh configuration directory (`~/.oh-my-zsh`) in a text editor.
-- **`mkobsidian`**: Instantly jumps (`cd`) to your active Obsidian notebook vault (defaults to `PhysicsNotes` in iCloud).
-- **`mkcontext`**: Directly opens the shared local configurations file (`~/.config/zsh/common-aliases.zsh`) for quick edits.
-- **`codes`**: Jumps directly to your local projects workspace folder (`~/Codes`).
-- **`pyqusolver`**: Shortcut to navigate directly to `~/Codes/QuantumEigenSolver/pyqusolver`.
-- **`qesgen`**: Shortcut to navigate directly to the general Python QES folder `~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python`.
-- **`l` / `ll` / `la`**: Directory list helpers. Uses `eza` (sorting folders first, adding Git status metrics for `ll`, and showing hidden files with `la`) when available, and falls back to standard `ls` flags if missing.
+- **`..` / `...` / `....`**: Quick navigation helpers to jump up one, two, or three parent directory levels, respectively.
 - **`cat`**: Automatically overrides `cat` to run `bat --paging=never` to provide beautiful syntax highlighting in the terminal when available.
+- **`codes`**: Jumps directly to local projects workspace folder (`~/Codes`) (if it exists).
+- **`l` / `ll` / `la`**: Directory list helpers. Uses `eza` (sorting folders first, adding Git status metrics for `ll`, and showing hidden files with `la`) when available, and falls back to standard `ls` flags if missing.
 - **`grep`**: Automatically overrides `grep` to run high-performance `rg` (ripgrep) when available.
 - **`mkcd <dir>`**: Creates a new directory and immediately navigates inside it in a single step.
+- **`mkcontext`**: Directly opens the shared local configurations file (`~/.config/zsh/common-aliases.zsh`) for quick edits.
+- **`mkhelp [all]`**: The central configuration reference center. Running `mkhelp` prints a clean, colorized reference dashboard showing all active shell plugins, loaded totals, and custom aliases with descriptions. Passing the `all` flag prints the full inventory of all active aliases and functions inside the current shell.
+- **`mkdirp`**: Shorthand for `mkdir -p` (creates parent directories if needed).
+- **`mkobsidian`**: Instantly jumps (`cd`) to your active Obsidian notebook vault (defaults to `PhysicsNotes` in iCloud).
+- **`ohmyzsh`**: Opens the Oh My Zsh configuration directory (`~/.oh-my-zsh`) in a text editor.
+- **`path`**: Prints each directory in your current `$PATH` environment variable on a new line for easy inspection.
+- **`pyqusolver`**: Shortcut to navigate directly to `~/Codes/QuantumEigenSolver/pyqusolver` (if it exists).
+- **`qesgen`**: Shortcut to navigate directly to the general Python QES folder `~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python` (if it exists).
+- **`reloadzsh`**: Shorthand for `exec zsh`, which fully reloads your current shell environment without losing your terminal session.
 - **`rscp [--rm] [-p PORT] <src> <dst>`**: A highly robust `rsync` copier/mover wrapper. By default, it operates as a copy command with real-time transfer progress, absolute space safety, and SSH port controls. Adding the `--rm` flag converts it into a secure file move that automatically sweeps and deletes empty source directories upon successful transfer.
 - **`extract <file>`**: A smart archive extractor. Detects extensions like `.zip`, `.tar.gz`, `.xz`, `.7z`, `.rar`, etc., and automatically runs the appropriate decompression binary with the correct flags.
+- **`zshconfig`**: Opens your main shell configuration file (`~/.zshrc`) in a text editor (default: TextMate/`mate`).
 
 ### 2. Scientific Development & Language Helpers (Local Zsh)
 
@@ -207,19 +207,30 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 
 ### 4. Local HPC & Remote Syncing (Local Zsh)
 
-- **`slog`**: Scans the current directory on your local machine for the latest Slurm log (`slurm-*.out`) and tails it (perfect when mounting cluster workspaces locally).
-- **`hpc-sync-to <local_src> <remote_dst>`**: Push scientific codes or datasets to a remote supercomputer path utilizing the highly secure, resume-capable `rscp` wrapper.
+- **`slog`**: Scans the current directory on local machine for the latest Slurm log (`slurm-*.out`) and tails it (perfect when mounting cluster workspaces locally).
+- **`hpc-sync-to <local_src> <remote_dst>`**: Push codes or datasets to a remote supercomputer path utilizing the highly secure, resume-capable `rscp` wrapper.
 - **`qessync`**: High-level shortcut that pushes your local `QuantumEigenSolver` codebase to the cluster workspace.
 - **`hpclogin`**: Quick-access shortcut to launch a secure SSH console connection to your configured remote supercomputer (`hpc-cluster`).
 
 ### 5. Slurm & Remote HPC Tools (Remote Cluster)
 
-- **`sq`**: Vibrant, color-coded Slurm job queue dashboard. Displays your active/pending jobs, color-coding running jobs in **vibrant Green**, pending/queueing jobs in **vibrant Yellow**, and completing/cancelling jobs in **Red**.
+- **`sq`**: Custom detailed Slurm job queue view. Displays your jobs including array IDs, partition, job name, maximum allocated CPUs, requested memory limits, walltime used/left, scheduling pending reason, compact job state, and active working directory.
+- **`sqr`**: Shorthand for `sq` restricted strictly to your currently running jobs.
+- **`sqn`**: Instantly prints the combined count of your active (running + pending) jobs.
+- **`sqnr`**: Instantly prints the count of your currently running jobs.
+- **`sac`**: Comprehensive accounting check since midnight showing JobID, JobName, partition, cores, node counts, average CPU, total CPU, maximum RSS (RAM used), requested memory, average RSS, average VM size, start time, elapsed time, job state, and exit code.
+- **`sqc`**: Color-coded active queue dashboard. Shows your jobs, color-coding running jobs in **vibrant Green**, pending/queueing jobs in **vibrant Yellow**, and completing/cancelling jobs in **Red**.
 - **`sqall`**: Displays the active Slurm job queue for all users on the supercomputer partition.
-- **`sinfo_avail`**: Displays current cluster partition status, node counts, and overall load statistics.
+- **`sqpd`**: Displays your pending jobs only, including the exact wait/scheduling reason codes.
+- **`jobnodes`**: Quick mapping of active job IDs to their allocated compute nodes.
+- **`sque` / `sqh`**: Quick shorthands for standard `squeue` and headers-free `squeue` outputs.
+- **`sprio_me`**: Displays your current scheduling priority coefficients across active partitions.
 - **`jobeff <job_id>`**: Evaluates CPU and memory resource efficiency for completed jobs (uses `seff` or falls back to custom-formatted `sacct` fields) to prevent over-allocation of resources.
 - **`jobtop <job_id>`**: Interactively runs `htop` inside your running Slurm job node for real-time memory and CPU thread profiling.
+- **`sub-interactive [-c cores] [-t hours] [-m memory]`**: Robust interactive node session allocator. Automatically verifies if a cluster native `sub-interactive` script is installed, falling back to a clean universal `srun` allocation session (configurable via CPU, time, and memory flags).
+- **`inter`**: Shorthand for launching a quick interactive node with `1` core, `6` hours walltime, and `1G` RAM (`sub-interactive -c 1 -t 6 -m 1`).
 - **`salloc_quick [cores] [walltime] [partition]`**: Grab a computing node on the fly for interactive debugging (avoids slowing down cluster login nodes). Defaults to `4` cores and `2` hours if unspecified.
+- **`mkslurm <script_name.sh>`**: Rapidly generates a robust, production-ready Slurm batch submission script template populated with highly-commented `#SBATCH` configurations, modular clean purge layers, and custom execution markers.
 - **`scanc <job_id>`**: Shorthand to cancel a specific Slurm job.
 - **`scancall`**: Immediately cancels all of your active and pending Slurm jobs.
 - **`slog`**: Tails the latest `slurm-*.out` log file generated in the remote directory.
