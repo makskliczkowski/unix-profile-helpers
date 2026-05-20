@@ -144,16 +144,16 @@ conda() {
 # export ARCHFLAGS="-arch $(uname -m)"
 
 # simulation path exports
-export ARMADILLO_INCL_DIR=/Users/makskliczkowski/libraries/armadillo-14.0.2/include
-export QES_PYPATH=/Users/makskliczkowski/Codes/QuantumEigenSolver/pyqusolver/Python
-export QES_PYPATH_GEN_PYTHON=/Users/makskliczkowski/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python
-export QES_SLURMPATH=/Users/makskliczkowski/Codes/QuantumEigenSolver/slurm
+export ARMADILLO_INCL_DIR=__HOME__/libraries/armadillo-14.0.2/include
+export QES_PYPATH=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python
+export QES_PYPATH_GEN_PYTHON=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python
+export QES_SLURMPATH=__HOME__/Codes/QuantumEigenSolver/slurm
 
 # >>> juliaup initialize >>>
 
 # !! Contents within this block are managed by juliaup !!
 
-path=('/Users/makskliczkowski/.juliaup/bin' $path)
+path=('__HOME__/.juliaup/bin' $path)
 export PATH
 
 # <<< juliaup initialize <<<
@@ -167,4 +167,4 @@ export PATH="/opt/homebrew/sbin:$PATH"
 
 
 # Added by Antigravity CLI installer
-export PATH="/Users/makskliczkowski/.local/bin:$PATH"
+export PATH="__HOME__/.local/bin:$PATH"
