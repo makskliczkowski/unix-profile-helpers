@@ -132,9 +132,9 @@ mkhelp() {
 
     custom_alias_names=(
         reloadzsh cls path mkdirp .. ... .... zshconfig ohmyzsh mkobsidian mkcontext codes pyqusolver qesgen
-        l ll la cat grep
+        l ll la cat grep condastat juliastat
     )
-    custom_function_names=(mkcd rscp extract mkhelp)
+    custom_function_names=(mkcd rscp extract mkhelp armacmp obsearch obnew)
 
     custom_alias_desc=(
         reloadzsh "reload the current zsh session"
@@ -156,12 +156,17 @@ mkhelp() {
         la "show hidden files too"
         cat "use bat when available"
         grep "use ripgrep when available"
+        condastat "print current active conda env status"
+        juliastat "print current active julia version status"
     )
     custom_function_desc=(
         mkcd "create a directory and enter it"
         rscp "rsync wrapper with optional --rm cleanup"
         extract "extract common archive formats"
         mkhelp "show this command reference"
+        armacmp "compile C++ script with Armadillo linked"
+        obsearch "search through Obsidian notes with ripgrep"
+        obnew "create a new scientific note in Obsidian vault"
     )
 
     alias_names=(${(ok)aliases})
@@ -227,3 +232,106 @@ mkhelp() {
         printf '  %s\n' "$name"
     done
 }
+
+# ==========================================
+# 🚀 Scientific Development & Language Helpers
+# ==========================================
+
+# Active Python/Conda environment status
+alias condastat="echo -e \"Conda Env: \033[1;32m\${CONDA_DEFAULT_ENV:-none}\033[0m (Python: \$(python --version 2>&1 | awk '{print \$2}'))\""
+
+# Active Julia environment status
+alias juliastat="echo -e \"Julia: \033[1;34m\$(julia --version 2>&1 | awk '{print \$3}')\033[0m\""
+
+# Armadillo C++ Compiler Helper
+# Compiles a C++ script with optimized flags (-O3) and links Armadillo
+armacmp() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: armacmp <source_file.cpp>"
+        return 1
+    fi
+    local src="$1"
+    local out="${src%.cpp}.out"
+    local include_path="${ARMADILLO_INCL_DIR:-/usr/local/include}"
+    
+    echo -e "\033[1;34mCompiling:\033[0m g++ -O3 -std=c++17 -I$include_path \"$src\" -o \"$out\" -larmadillo"
+    g++ -O3 -std=c++17 -I"$include_path" "$src" -o "$out" -larmadillo
+    
+    if [[ $? -eq 0 ]]; then
+        echo -e "\033[1;32mCompilation successful!\033[0m Executable: ./$out"
+    fi
+}
+
+# ==========================================
+# 📓 Obsidian vault integration
+# ==========================================
+
+# Search your physics and scientific notes vault using ripgrep
+obsearch() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: obsearch <query>"
+        return 1
+    fi
+    local vault_dir="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"
+    if [[ -d "$vault_dir" ]]; then
+        rg -i --heading --color=always "$1" "$vault_dir"
+    else
+        echo "Obsidian vault path not found."
+        return 1
+    fi
+}
+
+# Create a new markdown note in your vault with a scientific metadata template
+obnew() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: obnew <note-title>"
+        return 1
+    fi
+    local vault_dir="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"
+    if [[ ! -d "$vault_dir" ]]; then
+        echo "Obsidian vault path not found."
+        return 1
+    fi
+    
+    local title="$1"
+    # Convert title to a safe filename (lower case, hyphens)
+    local filename=$(echo "$title" | tr ' ' '-' | tr '[:upper:]' '[:lower:]').md
+    local filepath="$vault_dir/$filename"
+    
+    if [[ -f "$filepath" ]]; then
+        echo "Note '$filename' already exists."
+        return 1
+    fi
+    
+    # Write YAML frontmatter
+    cat <<EOF > "$filepath"
+---
+title: "$title"
+date: $(date +"%Y-%m-%d %H:%M:%S")
+tags: [physics, research]
+---
+
+# $title
+
+## Abstract
+
+
+## Discussion
+
+EOF
+
+    echo "Created note: $filepath"
+    # Open the note immediately
+    if command -v mate >/dev/null 2>&1; then
+        mate "$filepath"
+    else
+        open "$filepath"
+    fi
+}
+
+# ==========================================
+# 🎛️ Load HPC/Slurm-specific local controls
+# ==========================================
+if [[ -f "$HOME/.config/zsh/common-hpc.zsh" ]]; then
+    source "$HOME/.config/zsh/common-hpc.zsh"
+fi
