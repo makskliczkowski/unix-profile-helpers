@@ -261,28 +261,50 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
         if [[ "$auth_ssh" == "y" || "$auth_ssh" == "Y" ]]; then
             # Find public keys
             local_pub_keys=($(find "$HOME/.ssh" -name "id_*.pub" 2>/dev/null))
+            selected_key=""
+            
             if [[ ${#local_pub_keys[@]} -eq 0 ]]; then
-                echo -e "  ${RED}No local SSH public keys found in ~/.ssh. Skipping key copy...${NC}"
+                echo -e "  - ${YELLOW}No public keys found automatically in ~/.ssh${NC}"
+                read -p "  Please enter the absolute path to your public SSH key (or press Enter to skip SSH key authorization): " manual_key
+                if [[ -n "$manual_key" ]]; then
+                    manual_key="${manual_key/#\~/$HOME}"
+                    if [[ -f "$manual_key" ]]; then
+                        selected_key="$manual_key"
+                    else
+                        echo -e "  ${RED}Key file not found at: $manual_key. Skipping SSH authorization...${NC}"
+                    fi
+                fi
             else
                 echo -e "  Available local public keys:"
                 for i in "${!local_pub_keys[@]}"; do
-                    echo -e "    [$i] $(basename "${local_pub_keys[$i]}")"
+                    echo -e "    [$i] $(basename "${local_pub_keys[$i]}") (${local_pub_keys[$i]})"
                 done
-                read -p "  Choose key to copy [default: 0]: " key_idx
-                key_idx="${key_idx:-0}"
-                selected_key="${local_pub_keys[$key_idx]}"
                 
-                if [[ -f "$selected_key" ]]; then
-                    echo -e "  Copying $(basename "$selected_key") to remote cluster authorized_keys..."
-                    echo -e "  ${YELLOW}Notice:${NC} You will be prompted for your remote cluster password now."
-                    cat "$selected_key" | ssh "$remote_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-                    if [[ $? -eq 0 ]]; then
-                        echo -e "  - SSH Public Key: ${GREEN}Authorized successfully!${NC}"
+                read -p "  Enter public key index to copy, or enter the absolute path to a custom public key: " key_input
+                
+                if [[ "$key_input" =~ ^[0-9]+$ ]] && [[ "$key_input" -lt ${#local_pub_keys[@]} ]]; then
+                    selected_key="${local_pub_keys[$key_input]}"
+                elif [[ -n "$key_input" ]]; then
+                    # Try to treat input as a path
+                    key_input="${key_input/#\~/$HOME}"
+                    if [[ -f "$key_input" ]]; then
+                        selected_key="$key_input"
                     else
-                        echo -e "  - ${RED}SSH Authorization failed. Remote setup will proceed with standard password prompts.${NC}"
+                        echo -e "  ${RED}No valid key index or key file found at: $key_input. Skipping SSH authorization...${NC}"
                     fi
                 else
-                    echo -e "  ${RED}Invalid key selection. Skipping...${NC}"
+                    echo -e "  ${RED}No input provided. Skipping SSH key authorization...${NC}"
+                fi
+            fi
+            
+            if [[ -n "$selected_key" && -f "$selected_key" ]]; then
+                echo -e "  Copying $(basename "$selected_key") to remote cluster authorized_keys..."
+                echo -e "  ${YELLOW}Notice:${NC} You will be prompted for your remote cluster password now."
+                cat "$selected_key" | ssh "$remote_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+                if [[ $? -eq 0 ]]; then
+                    echo -e "  - SSH Public Key: ${GREEN}Authorized successfully!${NC}"
+                else
+                    echo -e "  - ${RED}SSH Authorization failed. Remote setup will proceed with standard password prompts.${NC}"
                 fi
             fi
         fi
