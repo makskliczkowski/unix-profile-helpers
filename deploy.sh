@@ -1,10 +1,16 @@
 #!/bin/bash
 
 # ==============================================================================
-# 🚀 Unix Profile Helpers Deployment & Configuration Tool
+# Unix Profile Helpers Deployment & Configuration Tool
 # ==============================================================================
-# This script automates the deployment and updating of your highly-optimized
+# Author: Maks Kliczkowski
+# GitHub: makskliczkowski/unix-profile-helpers
+# License: MIT
+#
+# This script automates the deployment and updating of highly-optimized
 # Zsh and Slurm/HPC configurations across local machines and remote clusters.
+# It just helps you set up local useful aliases and functions for your terminal, 
+# and also helps you deploy
 #
 # Workflows:
 #   - Detects system type (macOS / Linux)
@@ -17,31 +23,45 @@
 # ==============================================================================
 
 # Colors for terminal styling
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-BOLD='\033[1m'
+NC='\033[0m'            # No Color
+BOLD='\033[1m'          # Bold text
+RED='\033[0;31m'        # Red
+BLUE='\033[0;34m'       # Blue
+GREEN='\033[0;32m'      # Green
+YELLOW='\033[1;33m'     # Yellow
+MAGENTA='\033[0;35m'    # Magenta
+CYAN='\033[0;36m'       # Cyan
 
 # Title banner
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
-echo -e "${CYAN}${BOLD}     🚀 UNIX PROFILE HELPERS: LOCAL & REMOTE HPC DEPLOYER${NC}"
+echo -e "${CYAN}${BOLD}         UNIX PROFILE HELPERS: LOCAL & REMOTE HPC DEPLOYER${NC}"
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
 echo ""
 
 # Get script execution directory
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Detect OS
+OS_TYPE=$(uname -s)
+
+# Parse command line options
+REMOTE_ONLY=false
+for arg in "$@"; do
+    case $arg in
+        -r|--remote|--remote-only)
+            REMOTE_ONLY=true
+            ;;
+        *)
+            # Ignore other options
+            ;;
+    esac
+done
+
+if [ "$REMOTE_ONLY" = false ]; then
 # ------------------------------------------------------------------------------
 # 🕵️‍♂️ Step 1: Auditing System and Prerequisites
 # ------------------------------------------------------------------------------
 echo -e "${BLUE}${BOLD}[Step 1] Auditing local system and packages...${NC}"
-
-# Detect OS
-OS_TYPE=$(uname -s)
 if [[ "$OS_TYPE" == "Darwin" ]]; then
     echo -e "  - Local OS: ${GREEN}macOS (Darwin)${NC}"
 elif [[ "$OS_TYPE" == "Linux" ]]; then
@@ -208,6 +228,7 @@ cp "$SRC_DIR/common-hpc.zsh" "$CONF_DIR/common-hpc.zsh"
 
 echo -e "  - ${GREEN}Local deployment successfully complete!${NC}"
 echo ""
+fi
 
 # ------------------------------------------------------------------------------
 # 🎛️ Step 4: Remote Cluster (Slurm) Configuration Setup
@@ -218,7 +239,11 @@ echo -e "${MAGENTA}${BOLD}======================================================
 echo ""
 
 # Ask to deploy on cluster
-read -p "Would you like to deploy the high-performance remote cluster environment (common-slurm.zsh) to a remote HPC supercomputer? (y/n): " deploy_remote
+if [ "$REMOTE_ONLY" = true ]; then
+    deploy_remote="y"
+else
+    read -p "Would you like to deploy the high-performance remote cluster environment (common-slurm.zsh) to a remote HPC supercomputer? (y/n): " deploy_remote
+fi
 
 if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
     echo ""

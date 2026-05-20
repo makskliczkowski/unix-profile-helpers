@@ -72,6 +72,12 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
+##### **Remote-Only Deployment**
+If you wish to configure a remote HPC supercomputer and completely bypass the local profile installer/auditer, simply pass the remote-only flag:
+```bash
+./deploy.sh --remote-only   # or: ./deploy.sh -r
+```
+
 ##### What the deploy script does for you
 
 1. **System & Prerequisite Auditing**: Inspects your OS (macOS or Linux), checks if Oh My Zsh exists, and lists any missing package dependencies (`eza`, `bat`, `ripgrep`, etc.).
