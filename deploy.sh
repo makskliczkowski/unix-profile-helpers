@@ -44,7 +44,7 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Detect OS
 OS_TYPE=$(uname -s)
 
-# Parse command line options
+# Parse command line options - currently only supports --remote-only to skip local deployment
 REMOTE_ONLY=false
 for arg in "$@"; do
     case $arg in
@@ -58,9 +58,11 @@ for arg in "$@"; do
 done
 
 if [ "$REMOTE_ONLY" = false ]; then
+
 # ------------------------------------------------------------------------------
-# 🕵️‍♂️ Step 1: Auditing System and Prerequisites
+# Step 1: Auditing System and Prerequisites
 # ------------------------------------------------------------------------------
+
 echo -e "${BLUE}${BOLD}[Step 1] Auditing local system and packages...${NC}"
 if [[ "$OS_TYPE" == "Darwin" ]]; then
     echo -e "  - Local OS: ${GREEN}macOS (Darwin)${NC}"
@@ -70,7 +72,7 @@ else
     echo -e "  - Local OS: ${YELLOW}Unknown ($OS_TYPE)${NC}"
 fi
 
-# Check Shell
+# Check Shell and see if it's Zsh
 if [[ "$SHELL" != *"/zsh" ]]; then
     echo -e "  - ${YELLOW}Notice: Current login shell is not Zsh ($SHELL).${NC}"
     echo -e "    It is recommended to switch to Zsh using: chsh -s \$(which zsh)"
@@ -118,8 +120,9 @@ fi
 echo ""
 
 # ------------------------------------------------------------------------------
-# 📓 Step 2: Auditing Obsidian Note Vault Pathing
+# Step 2: Auditing Obsidian Note Vault Pathing
 # ------------------------------------------------------------------------------
+
 echo -e "${BLUE}${BOLD}[Step 2] Auditing Obsidian note-taking environment...${NC}"
 
 OBSIDIAN_INSTALLED=false
@@ -142,44 +145,52 @@ else
     echo -e "  - Obsidian: ${YELLOW}Not detected in default application paths.${NC}"
 fi
 
-# Always prompt for the Vault Name (as requested)
-read -p "  Enter your Obsidian vault name [default: PhysicsNotes]: " vault_name
-vault_name="${vault_name:-PhysicsNotes}"
+if [ "$OBSIDIAN_INSTALLED" = true ]; then
+    # Always prompt for the Vault Name (as requested)
+    read -p "  Enter your Obsidian vault name [default: PhysicsNotes]: " vault_name
+    vault_name="${vault_name:-PhysicsNotes}"
 
-DEFAULT_ICLOUD_VAULT="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/$vault_name"
-if [[ "$OS_TYPE" == "Darwin" && -d "$DEFAULT_ICLOUD_VAULT" ]]; then
-    echo -e "  - Vault: ${GREEN}Default iCloud '$vault_name' vault detected!${NC}"
-    OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
-else
-    if [[ "$OS_TYPE" == "Darwin" ]]; then
-        echo -e "  - Vault: Default iCloud '$vault_name' vault not found at:"
-        echo -e "    $DEFAULT_ICLOUD_VAULT"
-        read -p "    Use this default iCloud path anyway? (y/n) [default: y]: " use_icloud_anyway
-        use_icloud_anyway="${use_icloud_anyway:-y}"
-        if [[ "$use_icloud_anyway" == "y" || "$use_icloud_anyway" == "Y" ]]; then
-            OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
+    DEFAULT_ICLOUD_VAULT="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/$vault_name"
+    if [[ "$OS_TYPE" == "Darwin" && -d "$DEFAULT_ICLOUD_VAULT" ]]; then
+        echo -e "  - Vault: ${GREEN}Default iCloud '$vault_name' vault detected!${NC}"
+        OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
+    else
+        if [[ "$OS_TYPE" == "Darwin" ]]; then
+            echo -e "  - Vault: Default iCloud '$vault_name' vault not found at:"
+            echo -e "    $DEFAULT_ICLOUD_VAULT"
+            read -p "    Use this default iCloud path anyway? (y/n) [default: y]: " use_icloud_anyway
+            use_icloud_anyway="${use_icloud_anyway:-y}"
+            if [[ "$use_icloud_anyway" == "y" || "$use_icloud_anyway" == "Y" ]]; then
+                OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
+            fi
         fi
-    fi
-    
-    if [[ -z "$OBSIDIAN_VAULT_PATH" ]]; then
-        read -p "    Please enter the absolute path to your Obsidian vault '$vault_name' (or press Enter to skip configuring vault aliases): " user_vault
-        if [[ -n "$user_vault" ]]; then
-            # Expand ~ if entered
-            user_vault="${user_vault/#\~/$HOME}"
-            if [[ -d "$user_vault" ]]; then
-                echo -e "    Vault configured to: ${GREEN}$user_vault${NC}"
-                OBSIDIAN_VAULT_PATH="$user_vault"
-            else
-                echo -e "    ${RED}Directory not found. Skipping vault configuration...${NC}"
+        
+        if [[ -z "$OBSIDIAN_VAULT_PATH" ]]; then
+            read -p "    Please enter the absolute path to your Obsidian vault '$vault_name' (or press Enter to skip configuring vault aliases): " user_vault
+            if [[ -n "$user_vault" ]]; then
+                # Expand ~ if entered
+                user_vault="${user_vault/#\~/$HOME}"
+                if [[ -d "$user_vault" ]]; then
+                    echo -e "    Vault configured to: ${GREEN}$user_vault${NC}"
+                    OBSIDIAN_VAULT_PATH="$user_vault"
+                else
+                    echo -e "    ${RED}Directory not found. Skipping vault configuration...${NC}"
+                fi
             fi
         fi
     fi
+    echo ""
+else
+    echo -e "  - ${YELLOW}Skipping vault path configuration since Obsidian is not detected.${NC}"
+    echo -e "    You can still configure vault aliases manually later by editing ~/.config/zsh/common-aliases.zsh"
+    echo -e "    and replacing the default vault path with your custom path.${NC}"
+    echo ""
 fi
-echo ""
 
 # ------------------------------------------------------------------------------
-# ⚙️ Step 3: Deploys Profile with Username Substitutions
+# Step 3: Deploys Profile with Username Substitutions
 # ------------------------------------------------------------------------------
+
 echo -e "${BLUE}${BOLD}[Step 3] Deploys local shell profile...${NC}"
 
 # Backup helper function
@@ -231,10 +242,10 @@ echo ""
 fi
 
 # ------------------------------------------------------------------------------
-# 🎛️ Step 4: Remote Cluster (Slurm) Configuration Setup
+# Step 4: Remote Cluster (Slurm) Configuration Setup
 # ------------------------------------------------------------------------------
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
-echo -e "${CYAN}${BOLD}     🎛️ REMOTE SLURM SUPERCOMPUTER CONFIGURATOR${NC}"
+echo -e "${CYAN}${BOLD}        REMOTE SLURM SUPERCOMPUTER CONFIGURATOR${NC}"
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
 echo ""
 
@@ -253,6 +264,7 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
     echo ""
     
     read -p "  Enter remote cluster SSH address (e.g., user@cluster.hpc.edu or SSH Host alias): " remote_host
+    
     if [[ -z "$remote_host" ]]; then
         echo -e "  ${RED}Error: Address cannot be empty. Skipping remote configuration...${NC}"
     else

@@ -219,7 +219,7 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 - **`sqn`**: Instantly prints the combined count of your active (running + pending) jobs.
 - **`sqnr`**: Instantly prints the count of your currently running jobs.
 - **`sac`**: Comprehensive accounting check since midnight showing JobID, JobName, partition, cores, node counts, average CPU, total CPU, maximum RSS (RAM used), requested memory, average RSS, average VM size, start time, elapsed time, job state, and exit code.
-- **`sqc`**: Color-coded active queue dashboard. Shows your jobs, color-coding running jobs in **vibrant Green**, pending/queueing jobs in **vibrant Yellow**, and completing/cancelling jobs in **Red**.
+- **`sqc`**: Color-coded active queue dashboard. Shows the jobs, color-coding running jobs in **vibrant Green**, pending/queueing jobs in **vibrant Yellow**, and completing/cancelling jobs in **Red**.
 - **`sqall`**: Displays the active Slurm job queue for all users on the supercomputer partition.
 - **`sqpd`**: Displays your pending jobs only, including the exact wait/scheduling reason codes.
 - **`jobnodes`**: Quick mapping of active job IDs to their allocated compute nodes.
@@ -320,3 +320,16 @@ After a job completes, review its CPU/Memory usage efficiency so you can tune fu
 ```bash
 jobeff <job_id>
 ```
+
+## License
+
+This repository is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+- Inspired by the need for a streamlined scientific computing environment that integrates local development, note-taking, and HPC workflows.
+- Built using Oh My Zsh and various open-source CLI tools.
+- Special thanks to the open-source community for providing the tools and libraries that make this configuration possible.
+- Created by Maks Kliczkowski (2024-2026). Feel free to fork, customize, and contribute back!
+
+---
