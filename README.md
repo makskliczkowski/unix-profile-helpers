@@ -73,6 +73,7 @@ chmod +x deploy.sh
 ```
 
 ##### What the deploy script does for you:
+
 1. **System & Prerequisite Auditing**: Inspects your OS (macOS or Linux), checks if Oh My Zsh exists, and lists any missing package dependencies (`eza`, `bat`, `ripgrep`, etc.).
 2. **Obsidian Vault Discovery**: Searches your filesystem for an Obsidian installation. If on macOS, it auto-detects your default iCloud PhysicsNotes vault, otherwise it prompts you to provide a custom vault path.
 3. **Backup Creation**: Automatically creates time-stamped back-ups (e.g. `.zshrc.backup.YYYYMMDD_HHMMSS`) of any existing config files before writing updates.
