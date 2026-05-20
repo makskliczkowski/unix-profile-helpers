@@ -118,15 +118,31 @@ fi
 
 if [ "$OBSIDIAN_INSTALLED" = true ]; then
     echo -e "  - Obsidian: ${GREEN}Detected on your local machine.${NC}"
+else
+    echo -e "  - Obsidian: ${YELLOW}Not detected in default application paths.${NC}"
+fi
+
+# Always prompt for the Vault Name (as requested)
+read -p "  Enter your Obsidian vault name [default: PhysicsNotes]: " vault_name
+vault_name="${vault_name:-PhysicsNotes}"
+
+DEFAULT_ICLOUD_VAULT="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/$vault_name"
+if [[ "$OS_TYPE" == "Darwin" && -d "$DEFAULT_ICLOUD_VAULT" ]]; then
+    echo -e "  - Vault: ${GREEN}Default iCloud '$vault_name' vault detected!${NC}"
+    OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
+else
+    if [[ "$OS_TYPE" == "Darwin" ]]; then
+        echo -e "  - Vault: Default iCloud '$vault_name' vault not found at:"
+        echo -e "    $DEFAULT_ICLOUD_VAULT"
+        read -p "    Use this default iCloud path anyway? (y/n) [default: y]: " use_icloud_anyway
+        use_icloud_anyway="${use_icloud_anyway:-y}"
+        if [[ "$use_icloud_anyway" == "y" || "$use_icloud_anyway" == "Y" ]]; then
+            OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
+        fi
+    fi
     
-    # Try to auto-resolve default iCloud vault on macOS
-    DEFAULT_ICLOUD_VAULT="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"
-    if [[ "$OS_TYPE" == "Darwin" && -d "$DEFAULT_ICLOUD_VAULT" ]]; then
-        echo -e "  - Vault: ${GREEN}Default iCloud PhysicsNotes vault detected!${NC}"
-        OBSIDIAN_VAULT_PATH="$DEFAULT_ICLOUD_VAULT"
-    else
-        echo -e "  - Vault: Default iCloud PhysicsNotes vault not found."
-        read -p "    Please enter the absolute path to your Obsidian vault (or press Enter to skip configuring vault aliases): " user_vault
+    if [[ -z "$OBSIDIAN_VAULT_PATH" ]]; then
+        read -p "    Please enter the absolute path to your Obsidian vault '$vault_name' (or press Enter to skip configuring vault aliases): " user_vault
         if [[ -n "$user_vault" ]]; then
             # Expand ~ if entered
             user_vault="${user_vault/#\~/$HOME}"
@@ -138,8 +154,6 @@ if [ "$OBSIDIAN_INSTALLED" = true ]; then
             fi
         fi
     fi
-else
-    echo -e "  - Obsidian: ${YELLOW}Not detected.${NC} (Skipping vault path configs. Install Obsidian to activate journaling commands.)"
 fi
 echo ""
 
@@ -182,10 +196,10 @@ cp "$SRC_DIR/common-aliases.zsh" "$CONF_DIR/common-aliases.zsh"
 if [[ -n "$OBSIDIAN_VAULT_PATH" ]]; then
     echo -e "  - Injecting Obsidian vault directory..."
     # Escape path for sed substitution
-    local escaped_vault=$(echo "$OBSIDIAN_VAULT_PATH" | sed 's/[&/]/\\&/g')
+    escaped_vault=$(echo "$OBSIDIAN_VAULT_PATH" | sed 's/[&/]/\\&/g')
     # Replace default iCloud path with user's customized path
-    sed -i.bak "s|~/Library/Mobile\\\\ Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh" 2>/dev/null || \
-    sed -i "" "s|~/Library/Mobile\\\\ Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh"
+    sed -i.bak "s|\$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh" 2>/dev/null || \
+    sed -i "" "s|\$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh"
     rm -f "$CONF_DIR/common-aliases.zsh.bak"
 fi
 

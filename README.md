@@ -72,33 +72,49 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-##### What the deploy script does for you:
+##### What the deploy script does for you
 
 1. **System & Prerequisite Auditing**: Inspects your OS (macOS or Linux), checks if Oh My Zsh exists, and lists any missing package dependencies (`eza`, `bat`, `ripgrep`, etc.).
-2. **Obsidian Vault Discovery**: Searches your filesystem for an Obsidian installation. If on macOS, it auto-detects your default iCloud PhysicsNotes vault, otherwise it prompts you to provide a custom vault path.
+2. **Obsidian Vault Discovery (macos)**: Always prompts you for your Obsidian vault name (defaulting to `PhysicsNotes`), then auto-detects its default iCloud path on macOS, falling back to a custom absolute vault path if not found (or if on Linux).
 3. **Backup Creation**: Automatically creates time-stamped back-ups (e.g. `.zshrc.backup.YYYYMMDD_HHMMSS`) of any existing config files before writing updates.
 4. **Generalization & Substitutions**: Reads the profile files from the repository, dynamically replaces home folder placeholders (`__HOME__`) with your actual home directory, and deploys the files to `~/.zshrc` and `~/.config/zsh/`.
-5. **Interactive HPC Deployer**: Prompts you if you want to deploy to your remote cluster (Slurm) directly.
+5. **Interactive HPC Deployer (additional)**: Prompts you if you want to deploy to your remote cluster (Slurm) directly.
 
 #### Manual Deployment
 
-If you prefer to copy the files manually:
+If one prefers to copy the files manually, this can be done in a few simple steps:
 
-1. **Zsh Main Profile**: Copy `zshrc` to your home directory:
-   ```bash
-   cp zshrc ~/.zshrc
-   ```
-2. **Local Configurations Folder**: Copy the general aliases and HPC files:
-    ```bash
-    mkdir -p ~/.config/zsh
-    cp common-aliases.zsh ~/.config/zsh/common-aliases.zsh
-    cp common-hpc.zsh ~/.config/zsh/common-hpc.zsh
-    ```
-3. **Paths Adjustment (CRITICAL)**: Locate and manually replace all occurrences of `__HOME__` in `~/.zshrc` and `~/.config/zsh/common-aliases.zsh` with your actual home directory path (e.g., `/Users/yourname` or `/home/yourname`).
+##### **Zsh Main Profile**
+
+Copy `zshrc` to your home directory. The `zshrc` file contains placeholders (`__HOME__`) that you will need to replace with your actual home directory path after copying:
+
+```bash
+cp zshrc ~/.zshrc
+```
+
+Open `~/.zshrc` in a text editor and replace all occurrences of `__HOME__` with your actual home directory path (e.g., `/Users/<yourname>` or `/home/<yourname>`).
+
+##### **Local Configurations Folder**
+
+Copy the general aliases and HPC files into a new folder in your home directory. Again, remember to replace the `__HOME__` placeholders in these files with your actual home directory path:
+
+```bash
+mkdir -p ~/.config/zsh
+cp common-aliases.zsh ~/.config/zsh/common-aliases.zsh
+cp common-hpc.zsh ~/.config/zsh/common-hpc.zsh
+```
+
+Open `~/.config/zsh/common-aliases.zsh` and `~/.config/zsh/common-hpc.zsh` in a text editor and replace all occurrences of `__HOME__` with your actual home directory path.
+
+##### **Paths Adjustment (CRITICAL)**
+
+Locate and manually replace all occurrences of `__HOME__` in `~/.zshrc` and `~/.config/zsh/common-aliases.zsh` with your actual home directory path (e.g., `/Users/<yourname>` or `/home/<yourname>`).
 
 ---
 
 ### B. Remote Cluster Setup
+
+One of the workflows in scientific research is to develop code locally and then run large-scale computations on remote HPC clusters. This repository includes a portable Slurm configuration file (`common-slurm.zsh`) that can be easily deployed to your cluster's shell profile, providing you with powerful job management tools and HPC utilities directly in your cluster terminal.
 
 #### Automatic Remote Deployment (via `deploy.sh`)
 
