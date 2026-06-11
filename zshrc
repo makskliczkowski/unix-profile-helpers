@@ -4,11 +4,16 @@
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
+# Machine-specific values belong here. The deployer creates this file once and
+# preserves it on future updates.
+UPH_LOCAL_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/local.zsh"
+[[ -r "$UPH_LOCAL_CONFIG" ]] && source "$UPH_LOCAL_CONFIG"
+
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time Oh My Zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="agnoster"
+: "${ZSH_THEME:=agnoster}"
 
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
@@ -102,10 +107,17 @@ command -v zoxide >/dev/null 2>&1 && plugins+=(zoxide)
 # noisy widget warnings on startup.
 plugins+=(
     zsh-autosuggestions
-    zsh-completions
     zsh-history-substring-search
     fast-syntax-highlighting
 )
+
+# zsh-completions normally extends fpath only after compinit has run. Loading
+# its completion directory first keeps Oh My Zsh's dump metadata stable and
+# avoids rebuilding hundreds of completions on every shell startup.
+UPH_ZSH_COMPLETIONS="${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-completions/src"
+[[ -d "$UPH_ZSH_COMPLETIONS" ]] && fpath=("$UPH_ZSH_COMPLETIONS" $fpath)
+
+(( ${#UPH_EXTRA_PLUGINS[@]} )) && plugins+=("${UPH_EXTRA_PLUGINS[@]}")
 
 source $ZSH/oh-my-zsh.sh
 
@@ -118,10 +130,13 @@ bindkey '^[OB' history-substring-search-down
 # anaconda / miniforge lazy loader (prevents slow terminal startup)
 conda() {
     unset -f conda
-    if [[ -f "/opt/homebrew/Caskroom/miniforge/base/bin/activate" ]]; then
-        source "/opt/homebrew/Caskroom/miniforge/base/bin/activate"
-    elif [[ -f "$HOME/miniconda3/bin/activate" ]]; then
-        source "$HOME/miniconda3/bin/activate"
+    if [[ -f "/opt/homebrew/Caskroom/miniforge/base/etc/profile.d/conda.sh" ]]; then
+        source "/opt/homebrew/Caskroom/miniforge/base/etc/profile.d/conda.sh"
+    elif [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
+    else
+        echo "Conda initialization script not found." >&2
+        return 127
     fi
     conda "$@"
 }
@@ -143,11 +158,17 @@ conda() {
 # Compilation flags
 # export ARCHFLAGS="-arch $(uname -m)"
 
-# simulation path exports
-export ARMADILLO_INCL_DIR=__HOME__/libraries/armadillo-14.0.2/include
-export QES_PYPATH=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python
-export QES_PYPATH_GEN_PYTHON=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python
-export QES_SLURMPATH=__HOME__/Codes/QuantumEigenSolver/slurm
+# Solver package paths. Disable all of them in local.zsh with:
+# UPH_ENABLE_SOLVER_PATHS=false
+: "${UPH_ENABLE_SOLVER_PATHS:=true}"
+if [[ "$UPH_ENABLE_SOLVER_PATHS" == true ]]; then
+    : "${QES_PYPATH:=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python}"
+    : "${QES_PYPATH_GEN_PYTHON:=$QES_PYPATH/QES/general_python}"
+    : "${QES_SLURMPATH:=__HOME__/Codes/QuantumEigenSolver/slurm}"
+    export QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
+else
+    unset QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
+fi
 
 # >>> juliaup initialize >>>
 

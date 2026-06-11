@@ -1,0 +1,20 @@
+# Machine-specific shell settings.
+#
+# The deployer installs this as ~/.config/zsh/local.zsh only when that file
+# does not already exist. Keep private paths and optional plugin choices here.
+# Do not commit credentials or API keys.
+
+# Solver package paths are enabled by default. Set this to false on machines
+# where the solver repository is not installed.
+# UPH_ENABLE_SOLVER_PATHS=false
+#
+# Override individual solver paths when their layout differs:
+# QES_PYPATH="$HOME/path/to/pyqusolver/Python"
+# QES_PYPATH_GEN_PYTHON="$QES_PYPATH/QES/general_python"
+# QES_SLURMPATH="$HOME/path/to/QuantumEigenSolver/slurm"
+
+# Optional library locations belong here only on machines that have them.
+
+# Optional Oh My Zsh customization
+# ZSH_THEME="robbyrussell"
+# typeset -ga UPH_EXTRA_PLUGINS=(kubectl)

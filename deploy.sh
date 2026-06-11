@@ -36,6 +36,13 @@ CYAN='\033[0;36m'       # Cyan
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
 echo -e "${CYAN}${BOLD}         UNIX PROFILE HELPERS: LOCAL & REMOTE HPC DEPLOYER${NC}"
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
+echo -e "This script will help you set up your local "
+echo -e "terminal environment with useful aliases and functions "
+echo -e "and also deploy remote cluster configurations for HPC work."
+echo -e "Author     : Maks Kliczkowski (GitHub: makskliczkowski)"
+echo -e "License    : MIT"
+echo -e "===================================================================="
+echo -e "Have a nice day! \('-')/ \n"
 echo ""
 
 # Get script execution directory
@@ -46,6 +53,7 @@ OS_TYPE=$(uname -s)
 
 # Parse command line options - currently only supports --remote-only to skip local deployment
 REMOTE_ONLY=false
+DEPLOYMENT_FAILED=false
 for arg in "$@"; do
     case $arg in
         -r|--remote|--remote-only)
@@ -219,6 +227,15 @@ mkdir -p "$CONF_DIR"
 backup_file "$CONF_DIR/common-aliases.zsh"
 backup_file "$CONF_DIR/common-hpc.zsh"
 
+LOCAL_CONFIG="$CONF_DIR/local.zsh"
+if [[ ! -e "$LOCAL_CONFIG" ]]; then
+    echo -e "  - Creating machine-specific settings at ${CYAN}$LOCAL_CONFIG${NC}"
+    sed "s|__HOME__|$HOME|g" "$SRC_DIR/local.zsh.example" > "$LOCAL_CONFIG"
+    chmod 600 "$LOCAL_CONFIG"
+else
+    echo -e "  - Preserving existing machine-specific settings at ${CYAN}$LOCAL_CONFIG${NC}"
+fi
+
 echo -e "  - Deploying general aliases to ${CYAN}$CONF_DIR/common-aliases.zsh${NC}"
 # Copy general aliases directly
 cp "$SRC_DIR/common-aliases.zsh" "$CONF_DIR/common-aliases.zsh"
@@ -266,8 +283,12 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
     read -p "  Enter remote cluster SSH address (e.g., user@cluster.hpc.edu or SSH Host alias): " remote_host
     
     if [[ -z "$remote_host" ]]; then
-        echo -e "  ${RED}Error: Address cannot be empty. Skipping remote configuration...${NC}"
+        echo -e "  ${RED}Error: Address cannot be empty. Remote configuration failed.${NC}"
+        DEPLOYMENT_FAILED=true
     else
+        # Ignore interactive settings configured for an SSH host alias.
+        SSH_COMMAND_OPTIONS=(-o RemoteCommand=none -o RequestTTY=no)
+
         # 1. Authorize SSH Key (if requested)
         read -p "  Would you like to authorize your local SSH public key on this remote cluster for passwordless login? (y/n): " auth_ssh
         if [[ "$auth_ssh" == "y" || "$auth_ssh" == "Y" ]]; then
@@ -292,7 +313,8 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
                     echo -e "    [$i] $(basename "${local_pub_keys[$i]}") (${local_pub_keys[$i]})"
                 done
                 
-                read -p "  Enter public key index to copy, or enter the absolute path to a custom public key: " key_input
+                read -p "  Enter public key index to copy, or enter the absolute path to a custom public key [default: 0]: " key_input
+                key_input="${key_input:-0}"
                 
                 if [[ "$key_input" =~ ^[0-9]+$ ]] && [[ "$key_input" -lt ${#local_pub_keys[@]} ]]; then
                     selected_key="${local_pub_keys[$key_input]}"
@@ -312,7 +334,8 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
             if [[ -n "$selected_key" && -f "$selected_key" ]]; then
                 echo -e "  Copying $(basename "$selected_key") to remote cluster authorized_keys..."
                 echo -e "  ${YELLOW}Notice:${NC} You will be prompted for your remote cluster password now."
-                cat "$selected_key" | ssh "$remote_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+                cat "$selected_key" | ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" \
+                    'mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh" && cat >> "$HOME/.ssh/authorized_keys" && chmod 600 "$HOME/.ssh/authorized_keys"'
                 if [[ $? -eq 0 ]]; then
                     echo -e "  - SSH Public Key: ${GREEN}Authorized successfully!${NC}"
                 else
@@ -323,13 +346,55 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
         
         # 2. Copy the Slurm helpers
         echo ""
-        echo -e "  Deploying POSIX-compatible ${CYAN}common-slurm.zsh${NC} to remote cluster..."
+        echo -e "  Deploying Bash/Zsh-compatible ${CYAN}common-slurm.zsh${NC} to remote cluster..."
         echo -e "  ${YELLOW}Notice:${NC} You might be prompted for your password again."
-        ssh "$remote_host" "mkdir -p ~/.config/hpc"
-        scp "$SRC_DIR/common-slurm.zsh" "$remote_host":~/.config/hpc/common-slurm.sh
-        
-        if [[ $? -eq 0 ]]; then
-            echo -e "  - Remote slurm config: ${GREEN}Successfully deployed!${NC}"
+        if ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" 'mkdir -p "$HOME/.config/hpc"'; then
+            echo -e "  - ${RED}Failed to create the remote configuration directory.${NC}"
+            DEPLOYMENT_FAILED=true
+        elif ! scp "${SSH_COMMAND_OPTIONS[@]}" "$SRC_DIR/common-slurm.zsh" "$remote_host:.config/hpc/common-slurm.sh.new"; then
+            echo -e "  - ${RED}Failed to copy remote configuration files.${NC}"
+            DEPLOYMENT_FAILED=true
+        elif ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" '
+            set -e
+            helper="$HOME/.config/hpc/common-slurm.sh"
+            incoming="${helper}.new"
+            bash -n "$incoming"
+            if command -v zsh >/dev/null 2>&1; then
+                zsh -n "$incoming"
+            fi
+            if [ -f "$helper" ]; then
+                cp -p "$helper" "${helper}.backup"
+            fi
+            mv "$incoming" "$helper"
+            chmod 600 "$helper"
+            if [ ! -e "$HOME/.config/hpc/local.sh" ]; then
+                printf "%s\n" \
+                    "# Per-cluster overrides for common-slurm.sh" \
+                    "# UPH_SLURM_PARTITION=normal" \
+                    "# UPH_SLURM_ACCOUNT=my-project" \
+                    "# UPH_GPU_TYPE=a100" \
+                    "# UPH_GPU_DEVEL_PARTITION=dgx" \
+                    "# UPH_GPU_DEVEL_QOS=devel" \
+                    "# UPH_MODULE_SLURM=slurm" \
+                    "# UPH_PC2_PROJECT=hpc-prf-example" \
+                    "# UPH_SCRATCH_DIR=\$PC2PFS/\$UPH_PC2_PROJECT" \
+                    "# UPH_MODULE_COMPILER=GCC/13.2.0" \
+                    "# UPH_MODULE_MPI=OpenMPI/4.1.6" \
+                    "# UPH_MODULE_HDF5=HDF5/1.14.3" \
+                    "# UPH_MODULE_PYTHON=Python/3.11" \
+                    "# UPH_MODULE_JULIA=lang/JuliaHPC" \
+                    "# UPH_MODULE_CONTAINER=system/Apptainer" \
+                    "# UPH_MODULE_BLAS=OpenBLAS/0.3.26" \
+                    "# UPH_MODULE_BOOST=Boost/1.84.0" \
+                    "# UPH_MODULE_NETCDF=netCDF/4.9.2" \
+                    > "$HOME/.config/hpc/local.sh"
+                chmod 600 "$HOME/.config/hpc/local.sh"
+            fi
+        '; then
+            echo -e "  - Remote slurm config: ${RED}Validation or activation failed.${NC}"
+            DEPLOYMENT_FAILED=true
+        else
+            echo -e "  - Remote slurm config: ${GREEN}Validated and deployed successfully!${NC}"
             
             # 3. Source it in remote shell profiles (.bashrc or .zshrc)
             echo -e "  Selecting target shell profile on cluster:"
@@ -338,24 +403,39 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
             read -p "  Select shell profile index [default: 1]: " shell_idx
             shell_idx="${shell_idx:-1}"
             
-            remote_profile="~/.bashrc"
-            [[ "$shell_idx" == "2" ]] && remote_profile="~/.zshrc"
+            remote_profile_name=".bashrc"
+            [[ "$shell_idx" == "2" ]] && remote_profile_name=".zshrc"
+            remote_profile="~/$remote_profile_name"
             
             echo -e "  Configuring remote auto-load inside ${CYAN}$remote_profile${NC}..."
             
             # Sourcing instructions block
-            sourcing_block="\n# Load high-performance Slurm cluster shortcuts\nif [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then\n    source \"\$HOME/.config/hpc/common-slurm.sh\"\nfi\n"
+            sourcing_block="\n# Load high-performance Slurm cluster shortcuts\nif [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then\n    . \"\$HOME/.config/hpc/common-slurm.sh\"\nfi\n"
             
-            ssh "$remote_host" "grep -q 'common-slurm.sh' $remote_profile || echo -e '$sourcing_block' >> $remote_profile"
-            if [[ $? -eq 0 ]]; then
+            if printf '%b' "$sourcing_block" | ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" \
+                "target=\"\$HOME/$remote_profile_name\"; touch \"\$target\" && { grep -Fq 'common-slurm.sh' \"\$target\" || cat >> \"\$target\"; }"; then
                 echo -e "  - Remote Auto-load: ${GREEN}Enabled successfully inside $remote_profile!${NC}"
+                remote_shell="bash"
+                [[ "$shell_idx" == "2" ]] && remote_shell="zsh"
+                if ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" "
+                    $remote_shell -c '. \"\$HOME/.config/hpc/common-slurm.sh\"; type inter >/dev/null 2>&1; type hpchelp >/dev/null 2>&1'
+                "; then
+                    echo -e "  - Remote helper check: ${GREEN}inter and hpchelp are available.${NC}"
+                    echo -e "  - Cluster overrides: ${CYAN}~/.config/hpc/local.sh${NC}"
+                    if ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" 'command -v srun >/dev/null 2>&1'; then
+                        echo -e "  - ${YELLOW}Warning: srun was not found in a non-interactive login.${NC}"
+                        echo -e "    Run ${CYAN}hpcdoctor${NC} after logging in to inspect the cluster environment."
+                    fi
+                else
+                    DEPLOYMENT_FAILED=true
+                    echo -e "  - ${RED}Remote helper verification failed in $remote_shell.${NC}"
+                fi
             else
+                DEPLOYMENT_FAILED=true
                 echo -e "  - ${RED}Failed to automatically configure remote auto-load.${NC}"
                 echo -e "    Please manually append this block inside your remote $remote_profile:"
-                echo -e "    ${CYAN}if [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then source \"\$HOME/.config/hpc/common-slurm.sh\"; fi${NC}"
+                echo -e "    ${CYAN}if [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then . \"\$HOME/.config/hpc/common-slurm.sh\"; fi${NC}"
             fi
-        else
-            echo -e "  - ${RED}Failed to copy remote configuration files.${NC}"
         fi
     fi
 fi
@@ -365,8 +445,16 @@ fi
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
-echo -e "${GREEN}${BOLD}     🎉 CONGRATULATIONS! DEPLOYMENT SUCCESSFULLY COMPLETED!${NC}"
+if [ "$DEPLOYMENT_FAILED" = true ]; then
+    echo -e "${RED}${BOLD}                    DEPLOYMENT FAILED${NC}"
+else
+    echo -e "${GREEN}${BOLD}            DEPLOYMENT SUCCESSFULLY COMPLETED!${NC}"
+fi
 echo -e "${MAGENTA}${BOLD}====================================================================${NC}"
-echo -e "  Reload your local active terminal session to apply the configs:"
-echo -e "  ${CYAN}${BOLD}reloadzsh${NC} (or ${CYAN}${BOLD}exec zsh${NC})"
+if [ "$REMOTE_ONLY" = false ]; then
+    echo -e "  Reload your local active terminal session to apply the configs:"
+    echo -e "  ${CYAN}${BOLD}reloadzsh${NC} (or ${CYAN}${BOLD}exec zsh${NC})"
+fi
 echo ""
+
+[ "$DEPLOYMENT_FAILED" = false ]

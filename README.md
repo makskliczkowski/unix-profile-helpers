@@ -16,9 +16,10 @@ This profiles are designed to be easily deployed on new machines and clusters, w
 
 - **`deploy.sh`**: The automated setup script. This script installs or updates the configuration files, dynamically manages home directory substitutions, audits dependencies, checks Obsidian installations, and deploys configurations to remote HPC supercomputers over secure tunnels (if applicable only).
 - **`zshrc`**: The core profile configuration file containing [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) settings, active plugin lists, theme choices (`agnoster`), paths, and the Python/Conda lazy loader. This is a generalized file containing placeholders (`__HOME__`) that one should start with when deploying the profile to a new machine.
+- **`local.zsh.example`**: A template for machine-specific paths and optional plugin settings. It is installed as `~/.config/zsh/local.zsh` once and preserved by later deployments.
 - **`common-aliases.zsh`**: An organized, modular aliases and helper functions file for a **local machine**. Defines navigation shortcuts, utility aliases (e.g. `eza`, `bat`, `ripgrep`), C++ compiles, Obsidian helpers, and `mkhelp`. This file is meant to be sourced in the main `zshrc` and can be easily extended with new aliases and functions.
 - **`common-hpc.zsh`**: Local machine helper scripts used to manage remote connections, monitor Slurm output logs synced locally (`slog`), and push scripts to cluster workspaces (`qessync`).
-- **`common-slurm.zsh`**: A portable, **fully POSIX-compliant** configuration file to copy to the **remote HPC cluster** `.bashrc` or `.zshrc`. It provides job control, colored queues, resource efficiency checking, and scratch disk setup.
+- **`common-slurm.zsh`**: A portable Bash/Zsh configuration file for a **remote HPC cluster**. It provides job control, interactive allocations, module profiles, resource checks, and Lustre/scratch discovery.
 
 ---
 
@@ -88,6 +89,17 @@ If you wish to configure a remote HPC supercomputer and completely bypass the lo
 4. **Generalization & Substitutions**: Reads the profile files from the repository, dynamically replaces home folder placeholders (`__HOME__`) with your actual home directory, and deploys the files to `~/.zshrc` and `~/.config/zsh/`.
 5. **Interactive HPC Deployer (additional)**: Prompts you if you want to deploy to your remote cluster (Slurm) directly.
 
+Machine-specific values should be placed in `~/.config/zsh/local.zsh`, for example:
+
+```zsh
+UPH_ENABLE_SOLVER_PATHS=false
+typeset -ga UPH_EXTRA_PLUGINS=(kubectl)
+```
+
+Solver package exports are enabled by default. Set `UPH_ENABLE_SOLVER_PATHS=false` to omit `QES_PYPATH`, `QES_PYPATH_GEN_PYTHON`, and `QES_SLURMPATH`, or define individual paths in `local.zsh` to override their defaults. Optional library locations such as `ARMADILLO_INCL_DIR` have no shared default and should only be added to `local.zsh` on machines where they are installed.
+
+The deployer creates this file only if it is missing, so repository updates do not overwrite local paths. Keep API keys out of the profile and load them from a credential manager or another appropriately protected mechanism.
+
 #### Manual Deployment
 
 If one prefers to copy the files manually, this can be done in a few simple steps:
@@ -130,8 +142,9 @@ When you run `./deploy.sh`, you will be prompted if you want to set up remote HP
 
 1. **Interactive Host Input**: Specify your SSH coordinates (e.g., `user@cluster.hpc.edu`).
 2. **Automated SSH Key Copying**: The script searches your local SSH configuration for public keys (like `id_rsa.pub` or `id_ed25519.pub`) and securely appends the chosen public key to the remote cluster's `authorized_keys` file to authorize passwordless logins.
-3. **Automated Helpers Upload**: Creates remote directories (`~/.config/hpc`) and uploads `common-slurm.zsh` securely to your cluster.
-4. **Automated Shell Profile Integration**: Checks the remote cluster shell configuration (`.bashrc` or `.zshrc` depending on what is selected) and safely appends the sourcing block if it isn't already present.
+3. **Validated Helpers Upload**: Uploads to a temporary file, validates Bash and Zsh syntax remotely, backs up the previous helper, and only then activates the update.
+4. **Per-Cluster Settings**: Creates `~/.config/hpc/local.sh` once for cluster-specific partitions, accounts, scratch paths, and exact module names. Later deployments preserve it.
+5. **Automated Shell Profile Integration**: Checks the remote cluster shell configuration (`.bashrc` or `.zshrc` depending on what is selected), appends the sourcing block if needed, and verifies that `inter` and `hpchelp` load.
 
 #### Manual Remote Deployment
 
@@ -214,6 +227,8 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 
 ### 5. Slurm & Remote HPC Tools (Remote Cluster)
 
+- **`hpchelp`**: Prints the complete runtime reference for remote job, storage, and module helpers.
+- **`hpcdoctor`**: Reports whether Slurm commands, environment modules, Lustre tools, and a scratch directory are visible in the current shell.
 - **`sq`**: Custom detailed Slurm job queue view. Displays your jobs including array IDs, partition, job name, maximum allocated CPUs, requested memory limits, walltime used/left, scheduling pending reason, compact job state, and active working directory.
 - **`sqr`**: Shorthand for `sq` restricted strictly to your currently running jobs.
 - **`sqn`**: Instantly prints the combined count of your active (running + pending) jobs.
@@ -227,18 +242,278 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 - **`sprio_me`**: Displays your current scheduling priority coefficients across active partitions.
 - **`jobeff <job_id>`**: Evaluates CPU and memory resource efficiency for completed jobs (uses `seff` or falls back to custom-formatted `sacct` fields) to prevent over-allocation of resources.
 - **`jobtop <job_id>`**: Interactively runs `htop` inside your running Slurm job node for real-time memory and CPU thread profiling.
-- **`sub-interactive [-c cores] [-t hours] [-m memory]`**: Robust interactive node session allocator. Automatically verifies if a cluster native `sub-interactive` script is installed, falling back to a clean universal `srun` allocation session (configurable via CPU, time, and memory flags).
-- **`inter`**: Shorthand for launching a quick interactive node with `1` core, `6` hours walltime, and `1G` RAM (`sub-interactive -c 1 -t 6 -m 1`).
+- **`inter [options]` / `sub-interactive [options]`**: Requests an interactive login shell using PC2's documented `srun ... --pty shell` pattern. Supports CPU (`-c`), time (`-t`), memory (`-m`), partition (`-p`), account (`-A`), QoS (`-q`), GPU GRES (`-g`), and shell (`-s`). Run `inter -h` for details.
+- **`inter_gpu [count]`**: Requests a Noctua 2 development GPU session on `dgx` with QoS `devel`, A100 GRES, 16 CPU cores per GPU, and PC2's GPU-count-dependent time limit.
 - **`salloc_quick [cores] [walltime] [partition]`**: Grab a computing node on the fly for interactive debugging (avoids slowing down cluster login nodes). Defaults to `4` cores and `2` hours if unspecified.
 - **`mkslurm <script_name.sh>`**: Rapidly generates a robust, production-ready Slurm batch submission script template populated with highly-commented `#SBATCH` configurations, modular clean purge layers, and custom execution markers.
 - **`scanc <job_id>`**: Shorthand to cancel a specific Slurm job.
 - **`scancall`**: Immediately cancels all of your active and pending Slurm jobs.
 - **`slog`**: Tails the latest `slurm-*.out` log file generated in the remote directory.
-- **`mkscratch`**: Automatically locates cluster high-speed parallel scratch storage space (e.g., Lustre/GPFS under `/scratch/$USER` or `/work/$USER`), creates the user workspace if needed, and deploys a symbolic link (`~/scratch`) in your home folder for instant navigation.
-- **`myquota`**: Rapidly displays home directory disk utilization and Lustre filesystem quotas.
-- **`modlist`**: Quick shorthand for `module list` to view active environment configurations.
-- **`modload_science`**: Performs a clean system environment purge and automatically loads a standard GCC, OpenMPI, Python, and Julia scientific computing stack.
-- **`tmux_guard`**: A protective background daemon that automatically advises attaching `tmux` on cluster login sessions to safeguard against connection dropouts.
+- **`lustreinfo` / `hpc_find_scratch`**: Lists Lustre mounts and reports the selected user scratch directory. Detection uses configured paths, common locations, and mounted Lustre filesystems.
+- **`mkscratch [path]`**: Creates or selects a user scratch directory, updates `~/scratch`, and enters it. Set `UPH_SCRATCH_DIR` when a cluster uses a project-specific layout.
+- **`myquota [path]`**: Displays filesystem utilization and uses `lfs quota` on Lustre or standard `quota` as a fallback.
+- **`modpurge` / `modlist` / `modavail`**: Purges, lists, or searches the environment-module stack.
+- **`moddefaults` / `modoverview` / `modshow` / `modspider` / `modkeyword`**: Exposes PC2/Lmod default-module, overview, metadata, and search operations.
+- **`modreset` / `modunload` / `modswap` / `moduse` / `modhelp`**: Resets or modifies the active module environment and search path.
+- **`software_find <query>`**: Uses PC2's `find_module` or `find_modules` search command, with Lmod search as a fallback.
+- **`modload <profiles...>`**: Loads one or more `cpp`, `fortran`, `mpi`, `hdf5`, `python`, `cmake`, `math` (BLAS/LAPACK), `boost`, `netcdf`, or combined `science` profiles.
+- **`modload_cpp` / `modload_fortran` / `modload_hdf5` / `modload_python` / `modload_science`**: Convenience wrappers for common build and runtime environments.
+- **`tmux_guard`**: Advises using `tmux` for remote interactive sessions when appropriate.
+
+Cluster module names are not standardized. Set exact names in `~/.config/hpc/local.sh` when the defaults do not match:
+
+```sh
+UPH_SLURM_PARTITION=normal
+UPH_SLURM_ACCOUNT=my-project
+UPH_GPU_TYPE=a100
+UPH_GPU_DEVEL_PARTITION=dgx
+UPH_GPU_DEVEL_QOS=devel
+UPH_MODULE_SLURM=slurm
+UPH_PC2_PROJECT=hpc-prf-example
+UPH_SCRATCH_DIR=$PC2PFS/$UPH_PC2_PROJECT
+UPH_MODULE_COMPILER=GCC/13.2.0
+UPH_MODULE_MPI=OpenMPI/4.1.6
+UPH_MODULE_HDF5=HDF5/1.14.3
+UPH_MODULE_PYTHON=lang/Python
+UPH_MODULE_JULIA=lang/JuliaHPC
+UPH_MODULE_CONTAINER=system/Apptainer
+UPH_MODULE_BLAS=OpenBLAS/0.3.26
+UPH_MODULE_BOOST=Boost/1.84.0
+UPH_MODULE_NETCDF=netCDF/4.9.2
+```
+
+#### Lustre and Scratch Configuration
+
+`lustreinfo` reports two different facts:
+
+```text
+Detected Lustre mounts:
+/scratch
+Lustre client:
+lfs 2.14.0_ddn240
+```
+
+- `lfs 2.14.0_ddn240` means the DDN Lustre client tools are installed. It does **not** identify your personal scratch directory.
+- `/scratch` is the Lustre mount point visible on the login node. It does **not** imply that `/scratch/$USER` exists or that users may create directories directly below `/scratch`.
+
+Clusters commonly organize Lustre storage by project, account, group, or allocation. On PC2, `$PC2PFS` is the base for temporary parallel project data and the usable path is normally `$PC2PFS/<project-acronym>`, not `/scratch/$USER`. Examples include:
+
+```text
+/scratch/$USER
+/scratch/users/$USER
+/scratch/<project>/$USER
+/scratch/<account>/$USER
+/scratch/<project>
+```
+
+The helper automatically accepts configured paths, `$SCRATCH`, common user paths, and writable user directories under detected Lustre mounts. It intentionally does not choose an arbitrary project directory.
+
+If `mkscratch` reports:
+
+```text
+No user scratch directory was detected.
+Set UPH_SCRATCH_DIR in your remote shell profile, then run mkscratch.
+Detected Lustre mounts:
+  /scratch
+```
+
+first find the path assigned by the cluster:
+
+```bash
+echo "$SCRATCH"
+echo "$PC2PFS"
+pc2info
+pc2projects
+ls -ld /scratch "/scratch/$USER" 2>/dev/null
+find /scratch -maxdepth 3 -type d -user "$USER" 2>/dev/null
+pc2status
+```
+
+Consult the cluster documentation or support team if these commands do not identify the allocation. Do not create a guessed project directory.
+
+Once the correct path is known, add it to the preserved remote configuration:
+
+```bash
+cat >> "$HOME/.config/hpc/local.sh" <<'EOF'
+UPH_PC2_PROJECT="hpc-prf-<project>"
+UPH_SCRATCH_DIR="$PC2PFS/$UPH_PC2_PROJECT"
+EOF
+. "$HOME/.config/hpc/common-slurm.sh"
+mkscratch
+```
+
+Alternatively, test a path once without changing the configuration:
+
+```bash
+mkscratch "$PC2PFS/hpc-prf-<project>"
+```
+
+On success, `mkscratch`:
+
+1. Verifies the directory exists, or creates it only when its parent is writable.
+2. Creates or updates `~/scratch` as a symbolic link.
+3. Changes the current directory to the selected scratch path.
+
+Use these diagnostics afterwards:
+
+```bash
+hpc_find_scratch
+readlink -f "$HOME/scratch"
+myquota
+hpcdoctor
+```
+
+On Noctua, Lustre quotas are normally assigned to the Unix group corresponding to a project. After setting `UPH_PC2_PROJECT`, `myquota` uses:
+
+```bash
+lfs quota -h -g "$UPH_PC2_PROJECT" "$PC2PFS"
+```
+
+#### Module Loading Behavior
+
+The module helpers use the cluster's existing Environment Modules or Lmod installation. PC2 uses Lmod gateway modules such as `compilers`, `lang`, `lib`, `mpi`, `numlib`, `system`, and `tools`. The helpers do not install compilers, Python, MPI, HDF5, or other libraries.
+
+`modload` processes each requested profile as follows:
+
+1. Initializes `module` from common system initialization scripts if necessary.
+2. Tries the exact `UPH_MODULE_*` override from `~/.config/hpc/local.sh`.
+3. If no override is set or it fails, tries generic candidate names in order.
+4. Stops at the first candidate that loads successfully.
+5. Runs `module list` after processing all requested profiles.
+6. Returns a nonzero status if any requested profile could not be loaded.
+
+The profiles perform these loads:
+
+| Profile | Modules attempted |
+| --- | --- |
+| `cpp`, `fortran` | Compiler: configured compiler, GCC, or Intel alternatives |
+| `mpi` | MPI implementation: configured MPI, OpenMPI, generic MPI, or Intel MPI |
+| `hdf5` | Serial or parallel HDF5 module |
+| `python` | Python, Anaconda, or Miniconda |
+| `julia` | PC2 `lang/JuliaHPC`, plain Julia, or generic Julia modules |
+| `container` | Apptainer or Singularity from the `system` gateway |
+| `cmake` | CMake |
+| `math` | OpenBLAS, FlexiBLAS, BLAS/LAPACK, or Intel MKL |
+| `boost` | Boost |
+| `netcdf` | NetCDF |
+| `science` | Compiler, MPI, HDF5, math libraries, Python, and CMake |
+
+Convenience commands expand to:
+
+```text
+modload_cpp       -> modload cpp cmake
+modload_fortran   -> modload fortran cmake
+modload_hdf5      -> modload cpp mpi hdf5
+modload_python    -> modload python
+modload_julia     -> modload julia
+modload_container -> modload container
+modload_science   -> modload science
+```
+
+Search before loading when the exact PC2 module name is unknown:
+
+```bash
+software_find HDF5
+software_find Python
+modoverview
+modspider HDF5
+modkeyword compiler mpi
+modshow lang/Python
+```
+
+`software_find` prefers PC2's `find_module`/`find_modules` command and falls back to Lmod `module spider` or `module keyword`.
+
+Because module names and dependency trees differ between clusters, inspect available versions before setting overrides:
+
+```bash
+modavail GCC
+modavail HDF5
+modavail Python
+module spider HDF5 2>/dev/null   # Lmod clusters
+```
+
+Then configure exact, compatible names in `~/.config/hpc/local.sh`:
+
+```sh
+UPH_MODULE_COMPILER="GCC/13.2.0"
+UPH_MODULE_MPI="OpenMPI/4.1.6-GCC-13.2.0"
+UPH_MODULE_HDF5="HDF5/1.14.3-OpenMPI-4.1.6"
+UPH_MODULE_PYTHON="lang/Python/3.11.5"
+UPH_MODULE_JULIA="lang/JuliaHPC"
+UPH_MODULE_CONTAINER="system/Apptainer"
+```
+
+For a clean reproducible build environment:
+
+```bash
+modpurge
+modload cpp mpi hdf5 cmake
+modlist
+which gcc g++ gfortran mpicc mpicxx h5cc h5pcc cmake
+```
+
+`modpurge` removes all currently loaded modules, so use it only when replacing the current environment. `modload` itself does not purge automatically and can extend an existing module stack.
+
+#### PC2 Software and Runtime Directories
+
+PC2 distinguishes storage by purpose:
+
+- `$HOME`: small permanent configuration only; backed up and quota-limited.
+- `$PC2DATA/<project>`: permanent project data. PC2 recommends this for Python environments and packages.
+- `$PC2PFS/<project>`: parallel temporary computation data. Use this for active jobs, Julia depots, and large container images/caches.
+
+Avoid package depots and large caches in `$HOME`. Configure paths in `~/.config/hpc/local.sh`, replacing the project acronym:
+
+```sh
+UPH_PC2_PROJECT="hpc-prf-<project>"
+UPH_SCRATCH_DIR="$PC2PFS/$UPH_PC2_PROJECT"
+
+# Python: persistent project storage is preferred.
+export PYTHONUSERBASE="$PC2DATA/$UPH_PC2_PROJECT/python-user"
+export PIP_CACHE_DIR="$PC2DATA/$UPH_PC2_PROJECT/pip-cache"
+
+# Julia: keep a cluster-specific depot on the parallel filesystem.
+export JULIA_DEPOT_PATH="$PC2PFS/$UPH_PC2_PROJECT/.julia"
+
+# Apptainer/Singularity: keep large image caches outside HOME.
+export APPTAINER_CACHEDIR="$PC2PFS/$UPH_PC2_PROJECT/apptainer-cache"
+export SINGULARITY_CACHEDIR="$APPTAINER_CACHEDIR"
+export APPTAINER_TMPDIR="/dev/shm/$USER"
+export SINGULARITY_TMPDIR="$APPTAINER_TMPDIR"
+```
+
+Create the configured directories once:
+
+```bash
+mkdir -p "$PYTHONUSERBASE" "$PIP_CACHE_DIR" "$JULIA_DEPOT_PATH"
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+```
+
+For Conda, move both environments and package caches away from `$HOME`:
+
+```bash
+conda config --add envs_dirs "$PC2DATA/$UPH_PC2_PROJECT/conda/envs"
+conda config --add pkgs_dirs "$PC2DATA/$UPH_PC2_PROJECT/conda/pkgs"
+```
+
+Use separate Python/Conda and Julia environments for clusters with different CPU architectures. Binary packages compiled for one cluster may not be compatible with another.
+
+If software is unavailable through modules:
+
+1. Search with `software_find <name>`.
+2. Ask `pc2-support@uni-paderborn.de` whether it can be installed centrally.
+3. Use Python, Julia, or Conda package environments in project storage.
+4. Use `modload_container` and Apptainer/Singularity for a containerized environment.
+5. As a last resort, build with a project-local prefix such as `./configure --prefix="$PC2PFS/$UPH_PC2_PROJECT/prefix"`.
+
+PC2 references used for this integration:
+
+- [Finding Software](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1900614/Finding+Software)
+- [Loading Software Environments Using Modules](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1900596)
+- [File Systems](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1901764/File+Systems)
+- [Python](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1903900)
+- [Julia](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1902093)
+- [Singularity Introduction](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1900673)
 
 ---
 
@@ -300,18 +575,103 @@ qessync
 Never compile or run long test scripts directly on the cluster login nodes (this can slow down the frontend for all users). Instead, request a quick interactive computing session on a worker node:
 
 ```bash
-salloc_quick 8 01:00:00 # Requests 8 cores for 1 hour
-# or 
-salloc_quick 16 00:30:00 # Requests 16 cores for 30 minutes
+inter -c 8 -t 01:00:00 -m 16G
+# Include cluster-specific scheduling fields when required:
+inter -c 8 -t 01:00:00 -m 16G -p normal -A my-project
 ```
+
+This expands to the PC2-supported form:
+
+```bash
+srun --nodes=1 --ntasks=1 --cpus-per-task=8 \
+    --time=01:00:00 --mem=16G \
+    --partition=normal --account=my-project \
+    --pty "$SHELL" -l
+```
+
+Important details:
+
+- `inter` lazily loads the `slurm` module when `srun` is not already in `PATH`. Override its name with `UPH_MODULE_SLURM` if required.
+- A numeric time such as `-t 30` is passed to Slurm unchanged and means **30 minutes**. Use `-t 02:00:00` for two hours.
+- If you belong to several compute-time projects, specify `-A <project>` or set `UPH_SLURM_ACCOUNT`, `SLURM_ACCOUNT`, or `SBATCH_ACCOUNT`.
+- A partition selects hardware; QoS controls priority and policy.
+- Interactive jobs may remain pending and are not recommended for unattended production work.
+
+For a generic GPU request:
+
+```bash
+inter -c 16 -t 01:00:00 -p dgx -q devel -g a100:1
+```
+
+The `-g` option produces PC2's documented GRES syntax:
+
+```text
+-g 1       -> --gres=gpu:1
+-g a100:2  -> --gres=gpu:a100:2
+```
+
+For Noctua 2 development/testing, use:
+
+```bash
+inter_gpu 1
+inter_gpu 4
+```
+
+`inter_gpu` follows PC2's published policy:
+
+| GPUs | CPU cores | Maximum time |
+| ---: | ---: | ---: |
+| 1 | 16 | 04:00:00 |
+| 2 | 32 | 03:30:00 |
+| 3 | 48 | 03:00:00 |
+| 4 | 64 | 02:30:00 |
+| 5 | 80 | 02:00:00 |
+| 6 | 96 | 01:30:00 |
+| 7 | 112 | 01:00:00 |
+| 8 | 128 | 00:30:00 |
+
+It is intended for GPU development and testing, not production workloads.
+
+If `inter` reports that `srun` is unavailable, inspect and restore the PC2 module environment:
+
+```bash
+module list
+module load slurm
+command -v srun
+inter -c 8 -t 01:00:00 -m 16G
+```
+
+If `module load slurm` fails:
+
+```bash
+software_find slurm
+modspider slurm
+```
+
+Then place the exact module name in `~/.config/hpc/local.sh`:
+
+```sh
+UPH_MODULE_SLURM="slurm/<version>"
+```
+
+PC2 references:
+
+- [Interactive Jobs](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1903234/Interactive+Jobs)
+- [Running Compute Jobs](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1902952/Running+Compute+Jobs)
+- [Node Types and Partitions](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1902981/Node+Types+and+Partitions)
+- [Quality-of-Service and Job Priorities](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/1902070/Quality-of-Service+QoS+and+Job+Priorities)
 
 ### 5. High-Speed Parallel Disk Workflows
 
 HPC nodes have high-speed parallel file systems (like Lustre) mounted on `/scratch` or `/work`. Use the `mkscratch` command on the cluster to navigate directly to high-speed scratch space, which auto-creates a symbolic link (`~/scratch`) in the home folder:
 
 ```bash
+lustreinfo
+hpc_find_scratch
 mkscratch
 ```
+
+If Lustre is detected but no user directory is found, configure the cluster-assigned path in `~/.config/hpc/local.sh` as described in [Lustre and Scratch Configuration](#lustre-and-scratch-configuration).
 
 ### 6. Resource Audits
 

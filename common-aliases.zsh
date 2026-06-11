@@ -14,9 +14,6 @@ alias mkcontext='mate ~/.config/zsh/common-aliases.zsh'
 alias codes='cd ~/Codes'
 alias pyqusolver='cd ~/Codes/QuantumEigenSolver/pyqusolver'
 alias qesgen='cd ~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python'
-export QES_PYPATH=~/Codes/QuantumEigenSolver/pyqusolver/Python
-export QES_SLURMPATH=~/Codes/QuantumEigenSolver/slurm
-export QES_PYPATH_GEN_PYTHON=~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python
 
 if command -v eza >/dev/null 2>&1; then
     alias l='eza -1 --group-directories-first'
@@ -252,10 +249,18 @@ armacmp() {
     fi
     local src="$1"
     local out="${src%.cpp}.out"
-    local include_path="${ARMADILLO_INCL_DIR:-/usr/local/include}"
-    
-    echo -e "\033[1;34mCompiling:\033[0m g++ -O3 -std=c++17 -I$include_path \"$src\" -o \"$out\" -larmadillo"
-    g++ -O3 -std=c++17 -I"$include_path" "$src" -o "$out" -larmadillo
+    local -a include_flags=()
+
+    if [[ -n "$ARMADILLO_INCL_DIR" ]]; then
+        if [[ ! -d "$ARMADILLO_INCL_DIR" ]]; then
+            echo "Configured Armadillo include directory does not exist: $ARMADILLO_INCL_DIR"
+            return 1
+        fi
+        include_flags=(-I "$ARMADILLO_INCL_DIR")
+    fi
+
+    echo -e "\033[1;34mCompiling:\033[0m g++ -O3 -std=c++17 ${include_flags[*]} \"$src\" -o \"$out\" -larmadillo"
+    g++ -O3 -std=c++17 "${include_flags[@]}" "$src" -o "$out" -larmadillo
     
     if [[ $? -eq 0 ]]; then
         echo -e "\033[1;32mCompilation successful!\033[0m Executable: ./$out"
