@@ -372,18 +372,14 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
                     "# Per-cluster overrides for common-slurm.sh" \
                     "# UPH_SLURM_PARTITION=normal" \
                     "# UPH_SLURM_ACCOUNT=my-project" \
-                    "# UPH_GPU_TYPE=a100" \
-                    "# UPH_GPU_DEVEL_PARTITION=dgx" \
-                    "# UPH_GPU_DEVEL_QOS=devel" \
                     "# UPH_MODULE_SLURM=slurm" \
-                    "# UPH_PC2_PROJECT=hpc-prf-example" \
-                    "# UPH_SCRATCH_DIR=\$PC2PFS/\$UPH_PC2_PROJECT" \
+                    "# UPH_SCRATCH_DIR=/path/to/project/scratch" \
                     "# UPH_MODULE_COMPILER=GCC/13.2.0" \
                     "# UPH_MODULE_MPI=OpenMPI/4.1.6" \
                     "# UPH_MODULE_HDF5=HDF5/1.14.3" \
                     "# UPH_MODULE_PYTHON=Python/3.11" \
-                    "# UPH_MODULE_JULIA=lang/JuliaHPC" \
-                    "# UPH_MODULE_CONTAINER=system/Apptainer" \
+                    "# UPH_MODULE_JULIA=Julia/1.11" \
+                    "# UPH_MODULE_CONTAINER=Apptainer" \
                     "# UPH_MODULE_BLAS=OpenBLAS/0.3.26" \
                     "# UPH_MODULE_BOOST=Boost/1.84.0" \
                     "# UPH_MODULE_NETCDF=netCDF/4.9.2" \

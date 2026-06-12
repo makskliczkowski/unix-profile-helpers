@@ -7,7 +7,6 @@
 #   UPH_SLURM_QOS=normal
 #   UPH_INTERACTIVE_SHELL=/bin/bash
 #   UPH_SCRATCH_DIR=/lustre/project/user
-#   UPH_PC2_PROJECT=hpc-prf-example
 #   UPH_MODULE_COMPILER="GCC/13.2.0"
 #   UPH_MODULE_MPI="OpenMPI/4.1.6"
 #   UPH_MODULE_HDF5="HDF5/1.14.3"
@@ -44,14 +43,42 @@ _uph_require_command() {
     fi
 }
 
+_uph_module_key() {
+    case "$1" in
+        compiler|cpp|cxx|fortran) printf '%s\n' "COMPILER" ;;
+        container|apptainer|singularity) printf '%s\n' "CONTAINER" ;;
+        blas|lapack|math) printf '%s\n' "BLAS" ;;
+        *)
+            printf '%s' "$1" |
+                tr '[:lower:]-' '[:upper:]_' |
+                tr -cd '[:alnum:]_'
+            printf '\n'
+            ;;
+    esac
+}
+
+_uph_module_var() {
+    printf 'UPH_MODULE_%s\n' "$(_uph_module_key "$1")"
+}
+
+_uph_module_get() {
+    local variable
+    local value
+    variable=$(_uph_module_var "$1")
+    eval "value=\${$variable-}"
+    printf '%s\n' "$value"
+}
+
 _uph_slurm_init() {
     local candidate
+    local configured
 
     command -v srun >/dev/null 2>&1 && return 0
     _uph_module_init >/dev/null 2>&1 || true
+    configured=$(_uph_module_get slurm)
 
     if command -v module >/dev/null 2>&1; then
-        for candidate in "${UPH_MODULE_SLURM:-}" slurm system/slurm; do
+        for candidate in "$configured" slurm; do
             [ -n "$candidate" ] || continue
             if module load "$candidate" >/dev/null 2>&1 &&
                 command -v srun >/dev/null 2>&1; then
@@ -608,6 +635,101 @@ software_find() {
     fi
 }
 
+modset() {
+    local persist=false
+    local profile variable module_name config_file temp_file
+
+    if [ "${1:-}" = "-p" ] || [ "${1:-}" = "--persist" ]; then
+        persist=true
+        shift
+    fi
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: modset [-p|--persist] <profile> <module-name>"
+        return 1
+    fi
+
+    profile="$1"
+    module_name="$2"
+    variable=$(_uph_module_var "$profile")
+    if [ "$variable" = "UPH_MODULE_" ]; then
+        _uph_error "Invalid module profile: $profile"
+        return 2
+    fi
+
+    export "$variable=$module_name"
+    _uph_success "Set $variable=$module_name"
+
+    if [ "$persist" = true ]; then
+        config_file="$HOME/.config/hpc/local.sh"
+        mkdir -p "${config_file%/*}" || return 1
+        temp_file=$(mktemp "${config_file}.tmp.XXXXXX") || return 1
+        if [ -f "$config_file" ]; then
+            awk -v variable="$variable" '
+                $0 !~ "^[[:space:]]*(export[[:space:]]+)?" variable "=" { print }
+            ' "$config_file" > "$temp_file"
+        fi
+        printf "export %s='%s'\n" "$variable" "$(printf '%s' "$module_name" | sed "s/'/'\\\\''/g")" >> "$temp_file"
+        mv "$temp_file" "$config_file"
+        chmod 600 "$config_file"
+        _uph_success "Persisted $variable in $config_file"
+    fi
+}
+
+modget() {
+    local profile variable value
+
+    if [ "$#" -eq 0 ]; then
+        env | LC_ALL=C sort | sed -n '/^UPH_MODULE_[A-Z0-9_]*=/p'
+        return 0
+    fi
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: modget [profile]"
+        return 1
+    fi
+
+    profile="$1"
+    variable=$(_uph_module_var "$profile")
+    value=$(_uph_module_get "$profile")
+    if [ -n "$value" ]; then
+        printf '%s=%s\n' "$variable" "$value"
+    else
+        _uph_warn "$variable is not set."
+        return 1
+    fi
+}
+
+modunset() {
+    local persist=false
+    local profile variable config_file temp_file
+
+    if [ "${1:-}" = "-p" ] || [ "${1:-}" = "--persist" ]; then
+        persist=true
+        shift
+    fi
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: modunset [-p|--persist] <profile>"
+        return 1
+    fi
+
+    profile="$1"
+    variable=$(_uph_module_var "$profile")
+    unset "$variable"
+    _uph_success "Unset $variable"
+
+    if [ "$persist" = true ]; then
+        config_file="$HOME/.config/hpc/local.sh"
+        if [ -f "$config_file" ]; then
+            temp_file=$(mktemp "${config_file}.tmp.XXXXXX") || return 1
+            awk -v variable="$variable" '
+                $0 !~ "^[[:space:]]*(export[[:space:]]+)?" variable "=" { print }
+            ' "$config_file" > "$temp_file"
+            mv "$temp_file" "$config_file"
+            chmod 600 "$config_file"
+            _uph_success "Removed $variable from $config_file"
+        fi
+    fi
+}
+
 _uph_module_try() {
     local candidate
     _uph_module_init || return 1
@@ -622,54 +744,66 @@ _uph_module_try() {
     return 1
 }
 
+_uph_module_try_profile() {
+    local profile="$1"
+    local configured
+    shift
+    configured=$(_uph_module_get "$profile")
+    _uph_module_try "$configured" "$@"
+}
+
 _uph_modload_profile() {
+    local configured
     case "$1" in
         compiler|cpp|cxx|fortran)
-            _uph_module_try "${UPH_MODULE_COMPILER:-}" compilers/GCC compiler/GCC GCC gcc intel-oneapi-compilers intel oneapi ||
+            _uph_module_try_profile compiler GCC gcc intel-oneapi-compilers intel oneapi ||
                 return 1
             ;;
         mpi)
-            _uph_module_try "${UPH_MODULE_MPI:-}" mpi/OpenMPI OpenMPI openmpi MPI impi ||
+            _uph_module_try_profile mpi OpenMPI openmpi MPI impi ||
                 return 1
             ;;
         hdf5)
-            _uph_module_try "${UPH_MODULE_HDF5:-}" data/HDF5 lib/HDF5 HDF5 hdf5 HDF5-parallel hdf5-parallel ||
+            _uph_module_try_profile hdf5 HDF5 hdf5 HDF5-parallel hdf5-parallel ||
                 return 1
             ;;
         python)
-            _uph_module_try "${UPH_MODULE_PYTHON:-}" lang/Python lang/Miniforge3 Python python Anaconda3 Miniconda3 ||
+            _uph_module_try_profile python Python python Anaconda3 Miniconda3 ||
                 return 1
             ;;
         julia)
-            _uph_module_try "${UPH_MODULE_JULIA:-}" lang/JuliaHPC lang/Julia JuliaHPC Julia julia ||
+            _uph_module_try_profile julia Julia julia ||
                 return 1
             ;;
         container|apptainer|singularity)
-            if ! _uph_module_try "${UPH_MODULE_CONTAINER:-}" system/Apptainer system/Singularity system/singularity Apptainer apptainer Singularity singularity; then
-                _uph_module_init || return 1
-                module load system >/dev/null 2>&1 || return 1
-                _uph_module_try Apptainer apptainer Singularity singularity || return 1
-            fi
+            _uph_module_try_profile container Apptainer apptainer Singularity singularity ||
+                return 1
             ;;
         cmake)
-            _uph_module_try "${UPH_MODULE_CMAKE:-}" devel/CMake tools/CMake CMake cmake ||
+            _uph_module_try_profile cmake CMake cmake ||
                 return 1
             ;;
         blas|lapack|math)
-            _uph_module_try "${UPH_MODULE_BLAS:-}" numlib/OpenBLAS lib/FlexiBLAS OpenBLAS FlexiBLAS BLAS LAPACK imkl ||
+            _uph_module_try_profile blas OpenBLAS FlexiBLAS BLAS LAPACK imkl ||
                 return 1
             ;;
         boost)
-            _uph_module_try "${UPH_MODULE_BOOST:-}" lib/Boost Boost boost ||
+            _uph_module_try_profile boost Boost boost ||
                 return 1
             ;;
         netcdf)
-            _uph_module_try "${UPH_MODULE_NETCDF:-}" data/netCDF data/NetCDF netCDF NetCDF netcdf ||
+            _uph_module_try_profile netcdf netCDF NetCDF netcdf ||
                 return 1
             ;;
         *)
-            _uph_error "Unknown module profile: $1"
-            return 1
+            configured=$(_uph_module_get "$1")
+            if [ -n "$configured" ]; then
+                _uph_module_try "$configured"
+            else
+                _uph_error "Unknown module profile: $1"
+                echo "Define it with: modset $1 <module-name>" >&2
+                return 1
+            fi
             ;;
     esac
 }
@@ -759,7 +893,10 @@ Storage:
   myquota [PATH]                show filesystem and Lustre quota usage
 
 Modules:
-  software_find QUERY           use PC2 find_module or Lmod search
+  software_find QUERY           use site search helper or Lmod search
+  modset [-p] PROFILE MODULE    map a profile to a module name
+  modget [PROFILE]              show one/all module mappings
+  modunset [-p] PROFILE         remove a module mapping
   modpurge, modreset, modlist   clear/reset/list loaded modules
   modavail, moddefaults         list available/default modules
   modoverview                   summarize versions by short name
@@ -778,7 +915,8 @@ Modules:
   modload_science               load the combined scientific stack
 
 Cluster-specific defaults can be set with UPH_SLURM_*, UPH_SCRATCH_DIR,
-and the corresponding UPH_MODULE_* variables.
+and generic UPH_MODULE_<PROFILE> variables. Use modset --persist to create
+or update those mappings in ~/.config/hpc/local.sh.
 EOF
 }
 

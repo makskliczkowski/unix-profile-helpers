@@ -255,7 +255,7 @@ Here is a thorough description of all available custom commands, shortcuts, and 
 - **`modpurge` / `modlist` / `modavail`**: Purges, lists, or searches the environment-module stack.
 - **`moddefaults` / `modoverview` / `modshow` / `modspider` / `modkeyword`**: Exposes PC2/Lmod default-module, overview, metadata, and search operations.
 - **`modreset` / `modunload` / `modswap` / `moduse` / `modhelp`**: Resets or modifies the active module environment and search path.
-- **`software_find <query>`**: Uses PC2's `find_module` or `find_modules` search command, with Lmod search as a fallback.
+- **`software_find <query>`**: Uses a site-provided `find_module` or `find_modules` command when available, with Lmod search as a fallback.
 - **`modload <profiles...>`**: Loads one or more `cpp`, `fortran`, `mpi`, `hdf5`, `python`, `cmake`, `math` (BLAS/LAPACK), `boost`, `netcdf`, or combined `science` profiles.
 - **`modload_cpp` / `modload_fortran` / `modload_hdf5` / `modload_python` / `modload_science`**: Convenience wrappers for common build and runtime environments.
 - **`tmux_guard`**: Advises using `tmux` for remote interactive sessions when appropriate.
@@ -265,18 +265,14 @@ Cluster module names are not standardized. Set exact names in `~/.config/hpc/loc
 ```sh
 UPH_SLURM_PARTITION=normal
 UPH_SLURM_ACCOUNT=my-project
-UPH_GPU_TYPE=a100
-UPH_GPU_DEVEL_PARTITION=dgx
-UPH_GPU_DEVEL_QOS=devel
 UPH_MODULE_SLURM=slurm
-UPH_PC2_PROJECT=hpc-prf-example
-UPH_SCRATCH_DIR=$PC2PFS/$UPH_PC2_PROJECT
+UPH_SCRATCH_DIR=/path/to/project/scratch
 UPH_MODULE_COMPILER=GCC/13.2.0
 UPH_MODULE_MPI=OpenMPI/4.1.6
 UPH_MODULE_HDF5=HDF5/1.14.3
-UPH_MODULE_PYTHON=lang/Python
-UPH_MODULE_JULIA=lang/JuliaHPC
-UPH_MODULE_CONTAINER=system/Apptainer
+UPH_MODULE_PYTHON=Python/3.11
+UPH_MODULE_JULIA=Julia/1.11
+UPH_MODULE_CONTAINER=Apptainer
 UPH_MODULE_BLAS=OpenBLAS/0.3.26
 UPH_MODULE_BOOST=Boost/1.84.0
 UPH_MODULE_NETCDF=netCDF/4.9.2
@@ -371,16 +367,70 @@ lfs quota -h -g "$UPH_PC2_PROJECT" "$PC2PFS"
 
 #### Module Loading Behavior
 
-The module helpers use the cluster's existing Environment Modules or Lmod installation. PC2 uses Lmod gateway modules such as `compilers`, `lang`, `lib`, `mpi`, `numlib`, `system`, and `tools`. The helpers do not install compilers, Python, MPI, HDF5, or other libraries.
+The module helpers use the cluster's existing Environment Modules or Lmod installation. They do not assume a particular cluster naming scheme and do not install compilers, Python, MPI, HDF5, or other libraries.
 
 `modload` processes each requested profile as follows:
 
 1. Initializes `module` from common system initialization scripts if necessary.
-2. Tries the exact `UPH_MODULE_*` override from `~/.config/hpc/local.sh`.
-3. If no override is set or it fails, tries generic candidate names in order.
-4. Stops at the first candidate that loads successfully.
-5. Runs `module list` after processing all requested profiles.
-6. Returns a nonzero status if any requested profile could not be loaded.
+2. Converts the profile to a generic variable such as `hdf5` to `UPH_MODULE_HDF5`.
+3. Tries the exact module name stored in that environment variable.
+4. For built-in profiles only, tries a short list of generic names such as `HDF5` or `hdf5`.
+5. Stops at the first candidate that loads successfully.
+6. Runs `module list` after processing all requested profiles.
+7. Returns a nonzero status if any requested profile could not be loaded.
+
+Set a mapping in the current shell:
+
+```bash
+modset hdf5 HDF5/1.14.3
+modset cpp GCC/13.2.0
+modset python Python/3.11
+```
+
+Persist it in `~/.config/hpc/local.sh`:
+
+```bash
+modset --persist hdf5 HDF5/1.14.3
+modset -p cpp GCC/13.2.0
+```
+
+Inspect or remove mappings:
+
+```bash
+modget
+modget hdf5
+modunset hdf5
+modunset --persist hdf5
+```
+
+Profiles are normalized to `UPH_MODULE_<PROFILE>`. Hyphens become underscores and names become uppercase. Related aliases share a canonical variable:
+
+```text
+cpp, cxx, fortran       -> UPH_MODULE_COMPILER
+math, blas, lapack      -> UPH_MODULE_BLAS
+container, apptainer,
+singularity             -> UPH_MODULE_CONTAINER
+```
+
+Arbitrary custom profiles require no library changes:
+
+```bash
+modset --persist petsc PETSc/3.21.5
+modset --persist cuda CUDA/12.4
+modset --persist fftw FFTW/3.3.10
+
+modload petsc cuda fftw
+```
+
+The equivalent direct configuration is:
+
+```sh
+export UPH_MODULE_PETSC="PETSc/3.21.5"
+export UPH_MODULE_CUDA="CUDA/12.4"
+export UPH_MODULE_FFTW="FFTW/3.3.10"
+```
+
+This environment-variable pass-through is the preferred way to adapt the generic library to any cluster.
 
 The profiles perform these loads:
 
@@ -390,8 +440,8 @@ The profiles perform these loads:
 | `mpi` | MPI implementation: configured MPI, OpenMPI, generic MPI, or Intel MPI |
 | `hdf5` | Serial or parallel HDF5 module |
 | `python` | Python, Anaconda, or Miniconda |
-| `julia` | PC2 `lang/JuliaHPC`, plain Julia, or generic Julia modules |
-| `container` | Apptainer or Singularity from the `system` gateway |
+| `julia` | Configured Julia module, then generic Julia names |
+| `container` | Configured container module, then Apptainer or Singularity |
 | `cmake` | CMake |
 | `math` | OpenBLAS, FlexiBLAS, BLAS/LAPACK, or Intel MKL |
 | `boost` | Boost |
@@ -410,7 +460,7 @@ modload_container -> modload container
 modload_science   -> modload science
 ```
 
-Search before loading when the exact PC2 module name is unknown:
+Search before loading when the exact site module name is unknown:
 
 ```bash
 software_find HDF5
@@ -421,7 +471,15 @@ modkeyword compiler mpi
 modshow lang/Python
 ```
 
-`software_find` prefers PC2's `find_module`/`find_modules` command and falls back to Lmod `module spider` or `module keyword`.
+`software_find` uses a site-provided `find_module`/`find_modules` command when available and falls back to Lmod `module spider` or `module keyword`.
+
+For example, a PC2 installation may use qualified names:
+
+```bash
+modset --persist python lang/Python/3.11.5
+modset --persist julia lang/JuliaHPC
+modset --persist container system/Apptainer
+```
 
 Because module names and dependency trees differ between clusters, inspect available versions before setting overrides:
 
