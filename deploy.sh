@@ -18,7 +18,7 @@
 #   - Detects and customizes Obsidian Vault pathways
 #   - Deploys Zsh profiles cleanly, substituting local home/user paths dynamically
 #   - Manages automatic back-ups of existing configs
-#   - Offers interactive deployment of remote cluster configs (common-slurm.zsh)
+#   - Offers interactive deployment of remote cluster configs (common-slurm.zsh, common-run.sh)
 #   - Authorizes local public SSH keys on remote supercomputers securely
 # ==============================================================================
 
@@ -344,9 +344,9 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
             fi
         fi
         
-        # 2. Copy the Slurm helpers
+        # 2. Copy the remote HPC helpers
         echo ""
-        echo -e "  Deploying Bash/Zsh-compatible ${CYAN}common-slurm.zsh${NC} to remote cluster..."
+        echo -e "  Deploying Bash/Zsh-compatible ${CYAN}common-slurm.zsh${NC} and ${CYAN}common-run.sh${NC} to remote cluster..."
         echo -e "  ${YELLOW}Notice:${NC} You might be prompted for your password again."
         if ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" 'mkdir -p "$HOME/.config/hpc"'; then
             echo -e "  - ${RED}Failed to create the remote configuration directory.${NC}"
@@ -354,43 +354,65 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
         elif ! scp "${SSH_COMMAND_OPTIONS[@]}" "$SRC_DIR/common-slurm.zsh" "$remote_host:.config/hpc/common-slurm.sh.new"; then
             echo -e "  - ${RED}Failed to copy remote configuration files.${NC}"
             DEPLOYMENT_FAILED=true
+        elif ! scp "${SSH_COMMAND_OPTIONS[@]}" "$SRC_DIR/common-run.sh" "$remote_host:.config/hpc/common-run.sh.new"; then
+            echo -e "  - ${RED}Failed to copy remote run helper.${NC}"
+            DEPLOYMENT_FAILED=true
         elif ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" '
             set -e
-            helper="$HOME/.config/hpc/common-slurm.sh"
-            incoming="${helper}.new"
-            bash -n "$incoming"
+            slurm_helper="$HOME/.config/hpc/common-slurm.sh"
+            slurm_incoming="${slurm_helper}.new"
+            run_helper="$HOME/.config/hpc/common-run.sh"
+            run_incoming="${run_helper}.new"
+            bash -n "$slurm_incoming"
+            bash -n "$run_incoming"
             if command -v zsh >/dev/null 2>&1; then
-                zsh -n "$incoming"
+                zsh -n "$slurm_incoming"
             fi
-            if [ -f "$helper" ]; then
-                cp -p "$helper" "${helper}.backup"
+            if [ -f "$slurm_helper" ]; then
+                cp -p "$slurm_helper" "${slurm_helper}.backup"
             fi
-            mv "$incoming" "$helper"
-            chmod 600 "$helper"
+            if [ -f "$run_helper" ]; then
+                cp -p "$run_helper" "${run_helper}.backup"
+            fi
+            mv "$slurm_incoming" "$slurm_helper"
+            mv "$run_incoming" "$run_helper"
+            chmod 600 "$slurm_helper" "$run_helper"
             if [ ! -e "$HOME/.config/hpc/local.sh" ]; then
                 printf "%s\n" \
                     "# Per-cluster overrides for common-slurm.sh" \
+                    "# This file is local-only and preserved by deploy.sh." \
                     "# UPH_SLURM_PARTITION=normal" \
                     "# UPH_SLURM_ACCOUNT=my-project" \
+                    "# UPH_SLURM_QOS=normal" \
+                    "# UPH_SLURM_CPUS=4" \
+                    "# UPH_SLURM_TIME=01:00:00" \
+                    "# UPH_SLURM_MEMORY=4G" \
+                    "# UPH_SLURM_GRES=gpu:1" \
+                    "# UPH_INTERACTIVE_SHELL=/bin/bash" \
+                    "# UPH_QUOTA_GROUP=my-project" \
                     "# UPH_MODULE_SLURM=slurm" \
                     "# UPH_SCRATCH_DIR=/path/to/project/scratch" \
-                    "# UPH_MODULE_COMPILER=GCC/13.2.0" \
-                    "# UPH_MODULE_MPI=OpenMPI/4.1.6" \
-                    "# UPH_MODULE_HDF5=HDF5/1.14.3" \
-                    "# UPH_MODULE_PYTHON=Python/3.11" \
-                    "# UPH_MODULE_JULIA=Julia/1.11" \
+                    "# UPH_PROJECT_NAME=hpc-project" \
+                    "# UPH_MODULE_COMPILER=compiler-module" \
+                    "# UPH_MODULE_MPI=mpi-module" \
+                    "# UPH_MODULE_HDF5=hdf5-module" \
+                    "# UPH_MODULE_PYTHON=python-module" \
+                    "# UPH_MODULE_JULIA=julia-module" \
+                    "# UPH_MODULE_CMAKE=cmake-module" \
                     "# UPH_MODULE_CONTAINER=Apptainer" \
-                    "# UPH_MODULE_BLAS=OpenBLAS/0.3.26" \
-                    "# UPH_MODULE_BOOST=Boost/1.84.0" \
-                    "# UPH_MODULE_NETCDF=netCDF/4.9.2" \
+                    "# UPH_MODULE_BLAS=blas-module" \
+                    "# UPH_MODULE_BOOST=boost-module" \
+                    "# UPH_MODULE_NETCDF=netcdf-module" \
                     > "$HOME/.config/hpc/local.sh"
                 chmod 600 "$HOME/.config/hpc/local.sh"
+            else
+                echo "Preserving existing $HOME/.config/hpc/local.sh"
             fi
         '; then
             echo -e "  - Remote slurm config: ${RED}Validation or activation failed.${NC}"
             DEPLOYMENT_FAILED=true
         else
-            echo -e "  - Remote slurm config: ${GREEN}Validated and deployed successfully!${NC}"
+            echo -e "  - Remote HPC helpers: ${GREEN}Validated and deployed successfully!${NC}"
             
             # 3. Source it in remote shell profiles (.bashrc or .zshrc)
             echo -e "  Selecting target shell profile on cluster:"
@@ -406,17 +428,17 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
             echo -e "  Configuring remote auto-load inside ${CYAN}$remote_profile${NC}..."
             
             # Sourcing instructions block
-            sourcing_block="\n# Load high-performance Slurm cluster shortcuts\nif [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then\n    . \"\$HOME/.config/hpc/common-slurm.sh\"\nfi\n"
+            sourcing_block="\n# Load high-performance Slurm and run-directory helpers\nif [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then\n    . \"\$HOME/.config/hpc/common-slurm.sh\"\nfi\nif [ -f \"\$HOME/.config/hpc/common-run.sh\" ]; then\n    . \"\$HOME/.config/hpc/common-run.sh\"\nfi\n"
             
             if printf '%b' "$sourcing_block" | ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" \
-                "target=\"\$HOME/$remote_profile_name\"; touch \"\$target\" && { grep -Fq 'common-slurm.sh' \"\$target\" || cat >> \"\$target\"; }"; then
+                "target=\"\$HOME/$remote_profile_name\"; touch \"\$target\" && { grep -Fq 'common-slurm.sh' \"\$target\" && grep -Fq 'common-run.sh' \"\$target\" || cat >> \"\$target\"; }"; then
                 echo -e "  - Remote Auto-load: ${GREEN}Enabled successfully inside $remote_profile!${NC}"
                 remote_shell="bash"
                 [[ "$shell_idx" == "2" ]] && remote_shell="zsh"
                 if ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" "
-                    $remote_shell -c '. \"\$HOME/.config/hpc/common-slurm.sh\"; type inter >/dev/null 2>&1; type hpchelp >/dev/null 2>&1'
+                    $remote_shell -c '. \"\$HOME/.config/hpc/common-slurm.sh\"; [ -f \"\$HOME/.config/hpc/common-run.sh\" ] && . \"\$HOME/.config/hpc/common-run.sh\"; type inter >/dev/null 2>&1; type hpchelp >/dev/null 2>&1; type uph_make_run_dir >/dev/null 2>&1'
                 "; then
-                    echo -e "  - Remote helper check: ${GREEN}inter and hpchelp are available.${NC}"
+                    echo -e "  - Remote helper check: ${GREEN}inter, hpchelp, and uph_make_run_dir are available.${NC}"
                     echo -e "  - Cluster overrides: ${CYAN}~/.config/hpc/local.sh${NC}"
                     if ! ssh "${SSH_COMMAND_OPTIONS[@]}" "$remote_host" 'command -v srun >/dev/null 2>&1'; then
                         echo -e "  - ${YELLOW}Warning: srun was not found in a non-interactive login.${NC}"
@@ -431,6 +453,7 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
                 echo -e "  - ${RED}Failed to automatically configure remote auto-load.${NC}"
                 echo -e "    Please manually append this block inside your remote $remote_profile:"
                 echo -e "    ${CYAN}if [ -f \"\$HOME/.config/hpc/common-slurm.sh\" ]; then . \"\$HOME/.config/hpc/common-slurm.sh\"; fi${NC}"
+                echo -e "    ${CYAN}if [ -f \"\$HOME/.config/hpc/common-run.sh\" ]; then . \"\$HOME/.config/hpc/common-run.sh\"; fi${NC}"
             fi
         fi
     fi

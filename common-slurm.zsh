@@ -1,23 +1,38 @@
 # Portable Slurm and HPC cluster shell helpers.
 # Source from Bash or Zsh, for example from ~/.bashrc or ~/.zshrc.
+# shellcheck shell=bash
 
 # Optional per-cluster overrides:
 #   UPH_SLURM_PARTITION=normal
 #   UPH_SLURM_ACCOUNT=my-project
 #   UPH_SLURM_QOS=normal
+#   UPH_SLURM_CPUS=4
+#   UPH_SLURM_TIME=01:00:00
+#   UPH_SLURM_MEMORY=4G
+#   UPH_SLURM_GRES=gpu:1
 #   UPH_INTERACTIVE_SHELL=/bin/bash
-#   UPH_SCRATCH_DIR=/lustre/project/user
-#   UPH_MODULE_COMPILER="GCC/13.2.0"
-#   UPH_MODULE_MPI="OpenMPI/4.1.6"
-#   UPH_MODULE_HDF5="HDF5/1.14.3"
-#   UPH_MODULE_PYTHON="Python/3.11"
-#   UPH_MODULE_BLAS="OpenBLAS/0.3.26"
-#   UPH_MODULE_BOOST="Boost/1.84.0"
-#   UPH_MODULE_NETCDF="netCDF/4.9.2"
+#   UPH_QUOTA_GROUP=my-project
+#   UPH_SCRATCH_DIR=/path/to/project/scratch
+#   UPH_MODULE_SLURM=slurm
+#   UPH_MODULE_COMPILER="compiler-module"
+#   UPH_MODULE_MPI="mpi-module"
+#   UPH_MODULE_HDF5="hdf5-module"
+#   UPH_MODULE_PYTHON="python-module"
+#   UPH_MODULE_JULIA="julia-module"
+#   UPH_MODULE_CMAKE="cmake-module"
+#   UPH_MODULE_CONTAINER="Apptainer"
+#   UPH_MODULE_BLAS="blas-module"
+#   UPH_MODULE_BOOST="boost-module"
+#   UPH_MODULE_NETCDF="netcdf-module"
 
 if [ -r "$HOME/.config/hpc/local.sh" ]; then
     # shellcheck disable=SC1090
     . "$HOME/.config/hpc/local.sh"
+fi
+
+if [ -r "$HOME/.config/hpc/common-run.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$HOME/.config/hpc/common-run.sh"
 fi
 
 _uph_info() {
@@ -156,6 +171,7 @@ jobtop() {
 # Interactive jobs and job control
 # ==========================================
 
+# Request an interactive Slurm shell with generic scheduling defaults.
 sub-interactive() {
     local cores="${UPH_SLURM_CPUS:-1}"
     local walltime="${UPH_SLURM_TIME:-01:00:00}"
@@ -163,7 +179,7 @@ sub-interactive() {
     local partition="${UPH_SLURM_PARTITION:-}"
     local account="${UPH_SLURM_ACCOUNT:-${SLURM_ACCOUNT:-${SBATCH_ACCOUNT:-}}}"
     local qos="${UPH_SLURM_QOS:-}"
-    local gpu_request="${UPH_SLURM_GRES:-${UPH_SLURM_GPUS:-}}"
+    local gpu_request="${UPH_SLURM_GRES:-}"
     local shell_path="${UPH_INTERACTIVE_SHELL:-${SHELL:-/bin/bash}}"
     local opt
     local -a options
@@ -230,34 +246,6 @@ inter() {
     sub-interactive "$@"
 }
 
-inter_gpu() {
-    local gpu_count="${1:-1}"
-    local gpu_type="${UPH_GPU_TYPE:-a100}"
-    local partition="${UPH_GPU_DEVEL_PARTITION:-dgx}"
-    local qos="${UPH_GPU_DEVEL_QOS:-devel}"
-    local cores_per_gpu="${UPH_GPU_CORES_PER_GPU:-16}"
-    local minutes cores
-
-    case "$gpu_count" in
-        ''|*[!0-9]*) _uph_error "Usage: inter_gpu [gpu-count: 1-8]"; return 2 ;;
-    esac
-    if [ "$gpu_count" -lt 1 ] || [ "$gpu_count" -gt 8 ]; then
-        _uph_error "Noctua 2 development sessions support 1-8 GPUs."
-        return 2
-    fi
-
-    minutes=$((270 - 30 * gpu_count))
-    cores=$((cores_per_gpu * gpu_count))
-    _uph_info "Noctua 2 development allocation: $gpu_count $gpu_type GPU(s), $cores CPU cores, $minutes minutes."
-    sub-interactive \
-        -c "$cores" \
-        -t "$minutes" \
-        -m "${UPH_GPU_MEMORY:-default}" \
-        -p "$partition" \
-        -q "$qos" \
-        -g "$gpu_type:$gpu_count"
-}
-
 salloc_quick() {
     local cores="${1:-${UPH_SLURM_CPUS:-4}}"
     local walltime="${2:-${UPH_SLURM_TIME:-02:00:00}}"
@@ -274,6 +262,7 @@ salloc_quick() {
     salloc "${options[@]}"
 }
 
+# Generate a minimal generic Slurm script without automatic module changes.
 mkslurm() {
     if [ -z "${1:-}" ]; then
         echo "Usage: mkslurm <script_name.sh>"
@@ -302,22 +291,110 @@ mkslurm() {
 
 set -euo pipefail
 
-# Adjust these modules to the cluster, or source common-slurm.sh and run:
-# modload cpp mpi hdf5 python
-if command -v module >/dev/null 2>&1; then
-    module purge
-    module load GCC OpenMPI HDF5 Python
+if [ -f "$HOME/.config/hpc/common-slurm.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$HOME/.config/hpc/common-slurm.sh"
 fi
 
 echo "Job started on $(date) on ${SLURM_NODELIST:-unknown node}"
 
-# srun --ntasks=1 --cpus-per-task="$SLURM_CPUS_PER_TASK" ./solver
+# Optional modules:
+# modload cpp mpi hdf5 python
+
+# Replace with workload:
+# srun --ntasks=1 --cpus-per-task="${SLURM_CPUS_PER_TASK:-1}" ./solver
 # srun python solver.py
 
 echo "Job finished on $(date)"
 EOF
     chmod +x "$out_file"
     _uph_success "Created Slurm submission template: $out_file"
+}
+
+# Generate a Cockpit-compatible Slurm script using common-run.sh status files.
+mkslurm_cockpit() {
+    if [ -z "${1:-}" ]; then
+        echo "Usage: mkslurm_cockpit <file.sh>"
+        return 1
+    fi
+    local out_file="$1"
+    case "$out_file" in
+        *.sh) ;;
+        *) out_file="${out_file}.sh" ;;
+    esac
+    if [ -e "$out_file" ]; then
+        _uph_error "File already exists: $out_file"
+        return 1
+    fi
+
+    cat <<'EOF' > "$out_file"
+#!/bin/bash
+#SBATCH --job-name=cockpit-job
+#SBATCH --output=slurm-%j.out
+#SBATCH --error=slurm-%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --time=12:00:00
+#SBATCH --mem=16G
+
+# COCKPIT_BEGIN
+# outputs:
+#   stdout: logs/stdout.log
+#   stderr: logs/stderr.log
+#   result_json: result.json
+#   status_json: status.json
+#   hdf5_glob:
+#     - "output/*.h5"
+#     - "output/*.hdf5"
+# COCKPIT_END
+
+set -euo pipefail
+
+if [ -f "$HOME/.config/hpc/common-slurm.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$HOME/.config/hpc/common-slurm.sh"
+fi
+if [ -f "$HOME/.config/hpc/common-run.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$HOME/.config/hpc/common-run.sh"
+fi
+
+uph_make_run_dir "${SLURM_JOB_NAME:-cockpit-job}" || exit 1
+uph_write_manifest "$0" "$@"
+uph_write_git_manifest "$PWD" "$RUN_DIR/git.txt"
+uph_json_status running
+
+cd "$RUN_DIR"
+
+set +e
+(
+    set -e
+    echo "Job started on $(date) on ${SLURM_NODELIST:-unknown node}"
+
+    # Replace this block with the real workload. Write HDF5 or other data
+    # products under "$OUTPUT_DIR" so Cockpit can discover them.
+    # srun --ntasks=1 --cpus-per-task="${SLURM_CPUS_PER_TASK:-1}" ./solver
+    # srun python solver.py
+
+    # Placeholder result JSON. Replace with real summary data when available.
+    printf '{\n  "status": "completed"\n}\n' > "$RESULT_JSON"
+
+    echo "Job finished on $(date)"
+) > "$LOG_DIR/stdout.log" 2> "$LOG_DIR/stderr.log"
+exit_code=$?
+set -e
+
+if [ "$exit_code" -eq 0 ]; then
+    uph_json_status completed
+else
+    uph_json_status failed "Command exited with status $exit_code"
+fi
+
+exit "$exit_code"
+EOF
+    chmod +x "$out_file"
+    _uph_success "Created Cockpit-compatible Slurm template: $out_file"
 }
 
 slog() {
@@ -361,59 +438,14 @@ lustreinfo() {
     fi
 }
 
-pc2projects() {
-    local base="${PC2PFS:-/scratch}"
-    local group
-    local found=0
-
-    _uph_info "PC2 project storage candidates under $base:"
-    for group in $(id -Gn 2>/dev/null); do
-        case "$group" in
-            hpc-*|pc2-*)
-                if [ -d "$base/$group" ]; then
-                    printf '  %s\n' "$base/$group"
-                    found=1
-                fi
-                ;;
-        esac
-    done
-    if [ "$found" -eq 0 ]; then
-        _uph_warn "No project directory matched your hpc-*/pc2-* groups."
-        echo "Groups: $(id -Gn 2>/dev/null)"
-        return 1
-    fi
-}
-
-pc2info() {
-    printf '%-12s %s\n' "PC2DATA" "${PC2DATA:-not set}"
-    printf '%-12s %s\n' "PC2PFS" "${PC2PFS:-not set}"
-    printf '%-12s %s\n' "PC2PFSN2" "${PC2PFSN2:-not set}"
-    printf '%-12s %s\n' "project" "${UPH_PC2_PROJECT:-not set}"
-    printf '%-12s %s\n' "scratch" "$(hpc_find_scratch 2>/dev/null || echo 'not detected')"
-    if command -v pc2status >/dev/null 2>&1; then
-        _uph_info "pc2status:"
-        pc2status
-    fi
-}
-
+# Detect the most likely user/project scratch path without creating directories.
 hpc_find_scratch() {
-    local candidate mount group
-    local pc2_base="${PC2PFS:-}"
-    local matches=""
-    local match_count=0
-
-    if [ -n "${UPH_PC2_PROJECT:-}" ] && [ -n "$pc2_base" ]; then
-        candidate="$pc2_base/$UPH_PC2_PROJECT"
-        if [ -d "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    fi
+    local candidate mount
 
     for candidate in \
         "${UPH_SCRATCH_DIR:-}" \
         "${SCRATCH:-}" \
-        "${PC2PFS_PROJECT:-}" \
+        "${WORK:-}" \
         "/scratch/$USER" \
         "/work/$USER" \
         "/lustre/$USER" \
@@ -430,25 +462,6 @@ hpc_find_scratch() {
             return 0
         fi
     done
-
-    if [ -n "$pc2_base" ] && [ -d "$pc2_base" ]; then
-        for group in $(id -Gn 2>/dev/null); do
-            case "$group" in
-                hpc-*|pc2-*)
-                    candidate="$pc2_base/$group"
-                    if [ -d "$candidate" ] && [ -w "$candidate" ]; then
-                        matches="${matches}${candidate}
-"
-                        match_count=$((match_count + 1))
-                    fi
-                    ;;
-            esac
-        done
-        if [ "$match_count" -eq 1 ]; then
-            printf '%s' "$matches"
-            return 0
-        fi
-    fi
 
     while IFS= read -r mount; do
         [ -n "$mount" ] || continue
@@ -478,11 +491,7 @@ mkscratch() {
     fi
     if [ -z "$scratch_path" ]; then
         _uph_error "No user scratch directory was detected."
-        echo "Set UPH_SCRATCH_DIR or UPH_PC2_PROJECT in ~/.config/hpc/local.sh."
-        if [ -n "${PC2PFS:-}" ]; then
-            echo "PC2PFS=$PC2PFS"
-            pc2projects 2>/dev/null || true
-        fi
+        echo "Set UPH_SCRATCH_DIR in ~/.config/hpc/local.sh."
         echo "Detected Lustre mounts:"
         _uph_lustre_mounts | sed 's/^/  /'
         return 1
@@ -510,21 +519,22 @@ mkscratch() {
     cd "$scratch_path" || return 1
 }
 
+# Report filesystem usage and Lustre or POSIX quota information for a path.
 myquota() {
     local target="${1:-$(hpc_find_scratch 2>/dev/null || printf '%s' "$HOME")}"
-    local project="${UPH_PC2_PROJECT:-}"
+    local quota_group="${UPH_QUOTA_GROUP:-}"
     _uph_info "Filesystem usage for $target:"
     df -h "$target"
 
     if command -v lfs >/dev/null 2>&1; then
-        if [ -n "$project" ]; then
-            _uph_info "Lustre group quota for $project:"
-            lfs quota -h -g "$project" "${PC2PFS:-$target}" 2>/dev/null ||
-                _uph_warn "The cluster did not return a group quota for $project."
+        if [ -n "$quota_group" ]; then
+            _uph_info "Lustre group quota for $quota_group:"
+            lfs quota -h -g "$quota_group" "$target" 2>/dev/null ||
+                _uph_warn "The cluster did not return a group quota for $quota_group."
         else
             _uph_info "Lustre user quota for $USER:"
             lfs quota -h -u "$USER" "$target" 2>/dev/null ||
-                _uph_warn "No user quota was returned. PC2 commonly uses project/group quotas; set UPH_PC2_PROJECT."
+                _uph_warn "No user quota was returned. Set UPH_QUOTA_GROUP if this cluster uses group quotas."
         fi
     elif command -v quota >/dev/null 2>&1; then
         _uph_info "User quota:"
@@ -635,6 +645,7 @@ software_find() {
     fi
 }
 
+# Set a UPH_MODULE_<PROFILE> mapping, optionally persisting it in local.sh.
 modset() {
     local persist=false
     local profile variable module_name config_file temp_file
@@ -675,6 +686,7 @@ modset() {
     fi
 }
 
+# Show one module mapping or all UPH_MODULE_* mappings.
 modget() {
     local profile variable value
 
@@ -698,6 +710,7 @@ modget() {
     fi
 }
 
+# Remove a UPH_MODULE_<PROFILE> mapping, optionally from local.sh.
 modunset() {
     local persist=false
     local profile variable config_file temp_file
@@ -808,6 +821,7 @@ _uph_modload_profile() {
     esac
 }
 
+# Load one or more generic module profiles using configured mappings first.
 modload() {
     local profile
     local failed=0
@@ -878,16 +892,23 @@ Jobs:
   sac, jobeff JOBID             inspect completed jobs
   jobtop JOBID                  run htop/top inside a job
   inter [options]               request an interactive srun shell
-  inter_gpu [COUNT]             Noctua 2 devel GPU session (1-8 GPUs)
   sub-interactive [options]     same as inter; use -h for all options
   salloc_quick [CPUS TIME PART] request an allocation
   mkslurm FILE                  create a batch script template
+  mkslurm_cockpit FILE          create a Cockpit-compatible batch template
   scanc JOBID, scancall         cancel one/all jobs
   slog                          follow the newest slurm-*.out
 
+Runs:
+  common-run.sh                 generic run/log/manifest helper layer
+  uph_make_run_dir NAME         create RUN_DIR with logs, output, tmp files
+  uph_run NAME COMMAND [ARGS]   run a command with logs and status JSON
+  uph_json_status STATUS [MSG]  write status.json
+  uph_write_manifest [CMD...]   write manifest.txt for the current run
+  uph_write_git_manifest [REPO] write git.txt with commit/status details
+
 Storage:
   lustreinfo                    list detected Lustre mounts
-  pc2info, pc2projects          inspect PC2 storage and projects
   hpc_find_scratch              print the detected user scratch path
   mkscratch [PATH]              link ~/scratch and enter it
   myquota [PATH]                show filesystem and Lustre quota usage
@@ -910,20 +931,20 @@ Modules:
   modload_fortran               load compiler and CMake
   modload_hdf5                  load compiler, MPI, and HDF5
   modload_python                load Python
-  modload_julia                 load JuliaHPC/Julia
+  modload_julia                 load Julia
   modload_container             load Apptainer/Singularity
   modload_science               load the combined scientific stack
 
 Cluster-specific defaults can be set with UPH_SLURM_*, UPH_SCRATCH_DIR,
-and generic UPH_MODULE_<PROFILE> variables. Use modset --persist to create
-or update those mappings in ~/.config/hpc/local.sh.
+UPH_QUOTA_GROUP, and generic UPH_MODULE_<PROFILE> variables. Use
+modset --persist to create or update module mappings in ~/.config/hpc/local.sh.
 EOF
 }
 
 hpcdoctor() {
     local command_name
     _uph_info "Shell: ${SHELL:-unknown}"
-    for command_name in srun squeue sacct sinfo module find_module pc2status findmnt lfs apptainer singularity; do
+    for command_name in srun squeue sacct sinfo module find_module findmnt lfs apptainer singularity; do
         if command -v "$command_name" >/dev/null 2>&1; then
             printf '  %-8s %s\n' "$command_name" "$(command -v "$command_name")"
         else
