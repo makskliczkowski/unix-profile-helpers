@@ -88,42 +88,30 @@ else
     echo -e "  - Shell: ${GREEN}Zsh detected${NC}"
 fi
 
-# Check Oh My Zsh
+# Check optional Oh My Zsh installation.
 OMZ_DIR="$HOME/.oh-my-zsh"
 if [[ ! -d "$OMZ_DIR" ]]; then
-    echo -e "  - ${YELLOW}Prerequisite Missing: Oh My Zsh is not installed at ~/.oh-my-zsh${NC}"
-    echo -e "    You should install Oh My Zsh before continuing. Run:"
-    echo -e "    ${CYAN}sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\"${NC}"
-    read -p "    Do you want to continue the profile deployment anyway? (y/n): " confirm_omz
-    if [[ "$confirm_omz" != "y" && "$confirm_omz" != "Y" ]]; then
-        echo -e "${RED}Deployment aborted.${NC}"
-        exit 1
-    fi
+    echo -e "  - Oh My Zsh: ${YELLOW}Not installed (optional; plain Zsh remains supported)${NC}"
 else
     echo -e "  - Oh My Zsh: ${GREEN}Detected at ~/.oh-my-zsh${NC}"
 fi
 
-# Audit Core CLI Tooling
-echo -e "  - Auditing performance dependencies:"
-PREREQS=(eza bat rg zoxide asdf juliaup)
-MISSING_PREREQS=()
-for tool in "${PREREQS[@]}"; do
+# Audit optional CLI tooling.
+echo -e "  - Auditing optional command-line tools:"
+OPTIONAL_TOOLS=(eza bat rg zoxide asdf juliaup)
+MISSING_OPTIONAL_TOOLS=()
+for tool in "${OPTIONAL_TOOLS[@]}"; do
     if command -v "$tool" >/dev/null 2>&1; then
         echo -e "    * $tool: ${GREEN}Installed${NC}"
     else
         echo -e "    * $tool: ${YELLOW}Missing${NC}"
-        MISSING_PREREQS+=("$tool")
+        MISSING_OPTIONAL_TOOLS+=("$tool")
     fi
 done
 
-if [[ ${#MISSING_PREREQS[@]} -gt 0 ]]; then
-    echo -e "  - ${YELLOW}Note: Some core diagnostic tools are missing: (${MISSING_PREREQS[*]}).${NC}"
-    if [[ "$OS_TYPE" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
-        echo -e "    You can easily install them using Brew:"
-        echo -e "    ${CYAN}brew install ${MISSING_PREREQS[*]}${NC}"
-    else
-        echo -e "    Please install them manually to enable all modular shell aliases."
-    fi
+if [[ ${#MISSING_OPTIONAL_TOOLS[@]} -gt 0 ]]; then
+    echo -e "  - ${YELLOW}Optional tools not found: (${MISSING_OPTIONAL_TOOLS[*]}).${NC}"
+    echo -e "    The profile will use fallbacks or omit the related integration."
 fi
 echo ""
 
@@ -153,8 +141,8 @@ else
     echo -e "  - Obsidian: ${YELLOW}Not detected in default application paths.${NC}"
 fi
 
-if [ "$OBSIDIAN_INSTALLED" = true ]; then
-    # Always prompt for the Vault Name (as requested)
+read -p "  Configure the optional Obsidian helpers now? (y/N): " configure_obsidian
+if [[ "$configure_obsidian" == "y" || "$configure_obsidian" == "Y" ]]; then
     read -p "  Enter your Obsidian vault name [default: PhysicsNotes]: " vault_name
     vault_name="${vault_name:-PhysicsNotes}"
 
@@ -189,9 +177,7 @@ if [ "$OBSIDIAN_INSTALLED" = true ]; then
     fi
     echo ""
 else
-    echo -e "  - ${YELLOW}Skipping vault path configuration since Obsidian is not detected.${NC}"
-    echo -e "    You can still configure vault aliases manually later by editing ~/.config/zsh/common-aliases.zsh"
-    echo -e "    and replacing the default vault path with your custom path.${NC}"
+    echo -e "  - Obsidian helpers remain disabled. Set OBSIDIAN_VAULT in ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/local.zsh to enable them later."
     echo ""
 fi
 
@@ -215,13 +201,12 @@ backup_file() {
 # 1. Deploy main zshrc
 backup_file "$HOME/.zshrc"
 
-echo -e "  - Deploying customized ${CYAN}~/.zshrc${NC} (resolving home directory placeholders...)"
-# Substitute __HOME__ with actual $HOME path dynamically
-sed "s|__HOME__|$HOME|g" "$SRC_DIR/zshrc" > "$HOME/.zshrc"
+echo -e "  - Deploying portable ${CYAN}~/.zshrc${NC}..."
+cp "$SRC_DIR/zshrc" "$HOME/.zshrc"
 echo -e "    ${GREEN}Success!${NC} ~/.zshrc written."
 
 # 2. Deploy common configurations
-CONF_DIR="$HOME/.config/zsh"
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
 mkdir -p "$CONF_DIR"
 
 backup_file "$CONF_DIR/common-aliases.zsh"
@@ -230,7 +215,7 @@ backup_file "$CONF_DIR/common-hpc.zsh"
 LOCAL_CONFIG="$CONF_DIR/local.zsh"
 if [[ ! -e "$LOCAL_CONFIG" ]]; then
     echo -e "  - Creating machine-specific settings at ${CYAN}$LOCAL_CONFIG${NC}"
-    sed "s|__HOME__|$HOME|g" "$SRC_DIR/local.zsh.example" > "$LOCAL_CONFIG"
+    cp "$SRC_DIR/local.zsh.example" "$LOCAL_CONFIG"
     chmod 600 "$LOCAL_CONFIG"
 else
     echo -e "  - Preserving existing machine-specific settings at ${CYAN}$LOCAL_CONFIG${NC}"
@@ -240,15 +225,15 @@ echo -e "  - Deploying general aliases to ${CYAN}$CONF_DIR/common-aliases.zsh${N
 # Copy general aliases directly
 cp "$SRC_DIR/common-aliases.zsh" "$CONF_DIR/common-aliases.zsh"
 
-# Customize vault path inside common-aliases.zsh if customized path exists
+# Store the selected vault in the machine-specific file. Shared helpers stay
+# identical across macOS and Linux deployments.
 if [[ -n "$OBSIDIAN_VAULT_PATH" ]]; then
-    echo -e "  - Injecting Obsidian vault directory..."
-    # Escape path for sed substitution
-    escaped_vault=$(echo "$OBSIDIAN_VAULT_PATH" | sed 's/[&/]/\\&/g')
-    # Replace default iCloud path with user's customized path
-    sed -i.bak "s|\$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh" 2>/dev/null || \
-    sed -i "" "s|\$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes|$escaped_vault|g" "$CONF_DIR/common-aliases.zsh"
-    rm -f "$CONF_DIR/common-aliases.zsh.bak"
+    if grep -Eq '^[[:space:]]*(export[[:space:]]+)?OBSIDIAN_VAULT=' "$LOCAL_CONFIG"; then
+        echo -e "  - Preserving existing OBSIDIAN_VAULT in ${CYAN}$LOCAL_CONFIG${NC}"
+    else
+        echo -e "  - Saving Obsidian vault in ${CYAN}$LOCAL_CONFIG${NC}"
+        printf '\nexport OBSIDIAN_VAULT=%q\n' "$OBSIDIAN_VAULT_PATH" >> "$LOCAL_CONFIG"
+    fi
 fi
 
 echo -e "  - Deploying local HPC manager to ${CYAN}$CONF_DIR/common-hpc.zsh${NC}"
@@ -270,7 +255,7 @@ echo ""
 if [ "$REMOTE_ONLY" = true ]; then
     deploy_remote="y"
 else
-    read -p "Would you like to deploy the high-performance remote cluster environment (common-slurm.zsh) to a remote HPC supercomputer? (y/n): " deploy_remote
+    read -p "Would you like to deploy the high-performance remote cluster environment (common-slurm.zsh) to a remote HPC supercomputer? (y/N): " deploy_remote
 fi
 
 if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
@@ -290,7 +275,7 @@ if [[ "$deploy_remote" == "y" || "$deploy_remote" == "Y" ]]; then
         SSH_COMMAND_OPTIONS=(-o RemoteCommand=none -o RequestTTY=no)
 
         # 1. Authorize SSH Key (if requested)
-        read -p "  Would you like to authorize your local SSH public key on this remote cluster for passwordless login? (y/n): " auth_ssh
+        read -p "  Would you like to authorize your local SSH public key on this remote cluster for passwordless login? (y/N): " auth_ssh
         if [[ "$auth_ssh" == "y" || "$auth_ssh" == "Y" ]]; then
             # Find public keys
             local_pub_keys=($(find "$HOME/.ssh" -name "id_*.pub" 2>/dev/null))

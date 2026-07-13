@@ -1,74 +1,15 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
-
-# Path to your Oh My Zsh installation.
-export ZSH="$HOME/.oh-my-zsh"
+# Oh My Zsh is optional. Override ZSH in local.zsh if it is installed elsewhere.
+: "${ZSH:=$HOME/.oh-my-zsh}"
+export ZSH
 
 # Machine-specific values belong here. The deployer creates this file once and
 # preserves it on future updates.
-UPH_LOCAL_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/local.zsh"
+UPH_ZSH_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
+UPH_LOCAL_CONFIG="$UPH_ZSH_CONFIG_DIR/local.zsh"
 [[ -r "$UPH_LOCAL_CONFIG" ]] && source "$UPH_LOCAL_CONFIG"
 
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time Oh My Zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
+# Oh My Zsh settings (ignored when Oh My Zsh is not installed).
 : "${ZSH_THEME:=agnoster}"
-
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment one of the following lines to change the auto-update behavior
-# zstyle ':omz:update' mode disabled  # disable automatic updates
-# zstyle ':omz:update' mode auto      # update automatically without asking
-# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
-
-# Uncomment the following line to change how often to auto-update (in days).
-# zstyle ':omz:update' frequency 13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS="true"
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="true"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# You can also set it to another string to have that shown instead of the default red dots.
-# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
-# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
-# Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
 
 # History and completion tuning.
 HISTFILE="$HOME/.zsh_history"
@@ -83,7 +24,6 @@ setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_IGNORE_SPACE
 setopt HIST_REDUCE_BLANKS
 setopt HIST_SAVE_NO_DUPS
-setopt INC_APPEND_HISTORY
 setopt INTERACTIVE_COMMENTS
 setopt SHARE_HISTORY
 
@@ -91,101 +31,118 @@ zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion:*' rehash true
 
-# Which plugins would you like to load?
-# Standard plugins can be found in $ZSH/plugins/
-# Custom plugins may be added to $ZSH_CUSTOM/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# Add wisely, as too many plugins slow down shell startup.
+# Oh My Zsh plugins bundled with installed commands.
 plugins=(git)
 
 command -v docker >/dev/null 2>&1 && plugins+=(docker)
 command -v asdf >/dev/null 2>&1 && plugins+=(asdf)
 command -v zoxide >/dev/null 2>&1 && plugins+=(zoxide)
 
-# `zsh-autocomplete` is installed locally, but left out of the active plugin list
-# because its preferred load order conflicts with this oh-my-zsh layout and causes
-# noisy widget warnings on startup.
-plugins+=(
-    zsh-autosuggestions
-    zsh-history-substring-search
+# Optional third-party plugins are loaded only when installed.
+for UPH_PLUGIN in \
+    zsh-autosuggestions \
+    zsh-history-substring-search \
     fast-syntax-highlighting
-)
+do
+    UPH_PLUGIN_DIR="${ZSH_CUSTOM:-$ZSH/custom}/plugins/$UPH_PLUGIN"
+    [[ -d "$UPH_PLUGIN_DIR" ]] && plugins+=("$UPH_PLUGIN")
+done
+unset UPH_PLUGIN UPH_PLUGIN_DIR
 
 # zsh-completions normally extends fpath only after compinit has run. Loading
 # its completion directory first keeps Oh My Zsh's dump metadata stable and
 # avoids rebuilding hundreds of completions on every shell startup.
 UPH_ZSH_COMPLETIONS="${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-completions/src"
 [[ -d "$UPH_ZSH_COMPLETIONS" ]] && fpath=("$UPH_ZSH_COMPLETIONS" $fpath)
+unset UPH_ZSH_COMPLETIONS
 
-(( ${#UPH_EXTRA_PLUGINS[@]} )) && plugins+=("${UPH_EXTRA_PLUGINS[@]}")
+if (( ${#UPH_EXTRA_PLUGINS[@]} )); then
+    for UPH_PLUGIN in "${UPH_EXTRA_PLUGINS[@]}"; do
+        if [[ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/$UPH_PLUGIN" || -d "$ZSH/plugins/$UPH_PLUGIN" ]]; then
+            plugins+=("$UPH_PLUGIN")
+        else
+            print -u2 "Skipping missing Oh My Zsh plugin: $UPH_PLUGIN"
+        fi
+    done
+fi
+unset UPH_PLUGIN
 
-source $ZSH/oh-my-zsh.sh
+if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
+    source "$ZSH/oh-my-zsh.sh"
+fi
 
 # History substring search bindings for the plugin above.
-bindkey '^[[A' history-substring-search-up
-bindkey '^[[B' history-substring-search-down
-bindkey '^[OA' history-substring-search-up
-bindkey '^[OB' history-substring-search-down
+if (( ${+functions[history-substring-search-up]} )); then
+    bindkey '^[[A' history-substring-search-up
+    bindkey '^[[B' history-substring-search-down
+    bindkey '^[OA' history-substring-search-up
+    bindkey '^[OB' history-substring-search-down
+fi
 
 # anaconda / miniforge lazy loader (prevents slow terminal startup)
 conda() {
-    unset -f conda
-    if [[ -f "/opt/homebrew/Caskroom/miniforge/base/etc/profile.d/conda.sh" ]]; then
-        source "/opt/homebrew/Caskroom/miniforge/base/etc/profile.d/conda.sh"
-    elif [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
-        source "$HOME/miniconda3/etc/profile.d/conda.sh"
-    else
-        echo "Conda initialization script not found." >&2
-        return 127
-    fi
-    conda "$@"
+    local conda_sh
+
+    for conda_sh in \
+        "$HOME/miniforge3/etc/profile.d/conda.sh" \
+        "$HOME/miniconda3/etc/profile.d/conda.sh" \
+        "$HOME/anaconda3/etc/profile.d/conda.sh" \
+        "/opt/homebrew/Caskroom/miniforge/base/etc/profile.d/conda.sh"
+    do
+        if [[ -r "$conda_sh" ]]; then
+            unset -f conda
+            source "$conda_sh"
+            conda "$@"
+            return
+        fi
+    done
+
+    print -u2 "Conda initialization script not found."
+    return 127
 }
 
-# User configuration
-
-# export MANPATH="/usr/local/man:$MANPATH"
-
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='nvim'
-# fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch $(uname -m)"
-
-# Solver package paths. Disable all of them in local.zsh with:
-# UPH_ENABLE_SOLVER_PATHS=false
-: "${UPH_ENABLE_SOLVER_PATHS:=true}"
+# Optional QuantumEigenSolver paths. Enable them in local.zsh.
+: "${UPH_ENABLE_SOLVER_PATHS:=false}"
 if [[ "$UPH_ENABLE_SOLVER_PATHS" == true ]]; then
-    : "${QES_PYPATH:=__HOME__/Codes/QuantumEigenSolver/pyqusolver/Python}"
+    : "${QES_ROOT:=$HOME/Codes/QuantumEigenSolver}"
+    : "${QES_PYQUSOLVER_DIR:=$QES_ROOT/pyqusolver}"
+    : "${QES_PYPATH:=$QES_PYQUSOLVER_DIR/Python}"
     : "${QES_PYPATH_GEN_PYTHON:=$QES_PYPATH/QES/general_python}"
-    : "${QES_SLURMPATH:=__HOME__/Codes/QuantumEigenSolver/slurm}"
-    export QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
+    : "${QES_SLURMPATH:=$QES_ROOT/slurm}"
+    export QES_ROOT QES_PYQUSOLVER_DIR QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
 else
-    unset QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
+    unset QES_ROOT QES_PYQUSOLVER_DIR QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
 fi
 
-# >>> juliaup initialize >>>
+# User-local executables. The unique path array avoids duplicate PATH entries.
+typeset -U path PATH
 
-# !! Contents within this block are managed by juliaup !!
+[[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
+[[ -d "$HOME/.juliaup/bin" ]] && path=("$HOME/.juliaup/bin" $path)
+[[ -d /opt/homebrew/bin ]] && path=(/opt/homebrew/bin $path)
+[[ -d /opt/homebrew/sbin ]] && path=(/opt/homebrew/sbin $path)
 
-path=('__HOME__/.juliaup/bin' $path)
 export PATH
 
-# <<< juliaup initialize <<<
-export PATH="$HOME/.local/bin:$PATH"
+# Use a terminal-safe editor over SSH and VS Code locally when available.
+if [[ -z ${EDITOR:-} ]]; then
+    if [[ -n ${SSH_CONNECTION:-} ]]; then
+        command -v nano >/dev/null 2>&1 && EDITOR=nano || EDITOR=vi
+    elif command -v code >/dev/null 2>&1; then
+        EDITOR='code --wait'
+    elif command -v nvim >/dev/null 2>&1; then
+        EDITOR=nvim
+    elif command -v nano >/dev/null 2>&1; then
+        EDITOR=nano
+    else
+        EDITOR=vi
+    fi
+fi
+export EDITOR
+: "${VISUAL:=$EDITOR}"
+export VISUAL
 
 # Shared aliases and helpers that are easy to reuse on other devices.
-if [[ -f "$HOME/.config/zsh/common-aliases.zsh" ]]; then
-    source "$HOME/.config/zsh/common-aliases.zsh"
+if [[ -r "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh" ]]; then
+    source "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
 fi
-export PATH="/opt/homebrew/sbin:$PATH"
-
-
-# Added by Antigravity CLI installer
-export PATH="__HOME__/.local/bin:$PATH"

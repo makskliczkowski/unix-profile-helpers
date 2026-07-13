@@ -1,5 +1,7 @@
 # Common aliases and helpers intended to be portable across machines.
 
+: "${UPH_ZSH_CONFIG_DIR:=${XDG_CONFIG_HOME:-$HOME/.config}/zsh}"
+
 alias reloadzsh='exec zsh'
 alias cls='clear'
 alias path='printf "%s\n" ${path}'
@@ -7,13 +9,77 @@ alias mkdirp='mkdir -p'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
-alias zshconfig='mate ~/.zshrc'
-alias ohmyzsh='mate ~/.oh-my-zsh'
-alias mkobsidian='cd "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"'
-alias mkcontext='mate ~/.config/zsh/common-aliases.zsh'
-alias codes='cd ~/Codes'
-alias pyqusolver='cd ~/Codes/QuantumEigenSolver/pyqusolver'
-alias qesgen='cd ~/Codes/QuantumEigenSolver/pyqusolver/Python/QES/general_python'
+
+codes() {
+    local codes_dir="${UPH_CODES_DIR:-$HOME/Codes}"
+    if [[ ! -d "$codes_dir" ]]; then
+        print -u2 "Code directory not found: $codes_dir (override UPH_CODES_DIR in $UPH_ZSH_CONFIG_DIR/local.zsh)"
+        return 1
+    fi
+    cd -- "$codes_dir"
+}
+
+uph_qes_paths() {
+    if [[ ${UPH_ENABLE_SOLVER_PATHS:-false} != true ]]; then
+        print -u2 "QuantumEigenSolver helpers are disabled. Set UPH_ENABLE_SOLVER_PATHS=true in $UPH_ZSH_CONFIG_DIR/local.zsh."
+        return 1
+    fi
+}
+
+pyqusolver() {
+    uph_qes_paths || return
+    if [[ ! -d "$QES_PYQUSOLVER_DIR" ]]; then
+        print -u2 "QuantumEigenSolver directory not found: $QES_PYQUSOLVER_DIR"
+        return 1
+    fi
+    cd -- "$QES_PYQUSOLVER_DIR"
+}
+
+qesgen() {
+    uph_qes_paths || return
+    if [[ ! -d "$QES_PYPATH_GEN_PYTHON" ]]; then
+        print -u2 "QuantumEigenSolver general Python directory not found: $QES_PYPATH_GEN_PYTHON"
+        return 1
+    fi
+    cd -- "$QES_PYPATH_GEN_PYTHON"
+}
+
+# Obsidian integration is optional. Enable it in local.zsh with, for example:
+# export OBSIDIAN_VAULT="$HOME/Documents/PhysicsNotes"
+
+uph_obsidian_vault() {
+    if [[ -z ${OBSIDIAN_VAULT:-} ]]; then
+        print -u2 "Obsidian integration is disabled. Set OBSIDIAN_VAULT in $UPH_ZSH_CONFIG_DIR/local.zsh to enable it."
+        return 1
+    fi
+    if [[ ! -d "$OBSIDIAN_VAULT" ]]; then
+        print -u2 "Obsidian vault path not found: $OBSIDIAN_VAULT"
+        return 1
+    fi
+}
+
+uph_edit() {
+    local -a editor_command
+    editor_command=(${(z)${EDITOR:-nano}})
+    command "${editor_command[@]}" "$@"
+}
+
+zshconfig() {
+    uph_edit "$HOME/.zshrc"
+}
+
+ohmyzsh() {
+    uph_edit "$HOME/.oh-my-zsh"
+}
+
+mkcontext() {
+    uph_edit "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
+}
+
+mkobsidian() {
+    uph_obsidian_vault || return
+    cd -- "$OBSIDIAN_VAULT"
+}
 
 if command -v eza >/dev/null 2>&1; then
     alias l='eza -1 --group-directories-first'
@@ -30,8 +96,22 @@ if command -v bat >/dev/null 2>&1; then
 fi
 
 if command -v rg >/dev/null 2>&1; then
-    alias grep='rg'
+    alias rgrep='rg'
 fi
+
+open_file() {
+    local file="$1"
+
+    if command -v code >/dev/null 2>&1; then
+        command code "$file"
+    elif command -v xdg-open >/dev/null 2>&1; then
+        command xdg-open "$file" >/dev/null 2>&1 &!
+    elif command -v open >/dev/null 2>&1; then
+        command open "$file"
+    else
+        uph_edit "$file"
+    fi
+}
 
 mkcd() {
     mkdir -p -- "$1" && cd -- "$1"
@@ -121,17 +201,17 @@ extract() {
 
 mkhelp() {
     local mode="${1:-summary}"
-    local custom_source="$HOME/.config/zsh/common-aliases.zsh"
-    local vault_source="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes/common-aliases.zsh"
+    local custom_source="$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
+    local vault_source="${OBSIDIAN_VAULT:+$OBSIDIAN_VAULT/common-aliases.zsh}"
     local name
     local -a alias_names function_names custom_alias_names custom_function_names other_aliases other_functions
     typeset -A custom_alias_desc custom_function_desc
 
     custom_alias_names=(
-        reloadzsh cls path mkdirp .. ... .... zshconfig ohmyzsh mkobsidian mkcontext codes pyqusolver qesgen
-        l ll la cat grep condastat juliastat
+        reloadzsh cls path mkdirp .. ... ....
+        l ll la cat rgrep
     )
-    custom_function_names=(mkcd rscp extract mkhelp armacmp obsearch obnew)
+    custom_function_names=(codes uph_qes_paths pyqusolver qesgen uph_edit uph_obsidian_vault zshconfig ohmyzsh mkobsidian mkcontext open_file mkcd rscp extract mkhelp condastat juliastat armacmp obsearch obnew)
 
     custom_alias_desc=(
         reloadzsh "reload the current zsh session"
@@ -141,26 +221,30 @@ mkhelp() {
         .. "go up one directory"
         ... "go up two directories"
         .... "go up three directories"
-        zshconfig "open ~/.zshrc"
-        ohmyzsh "open ~/.oh-my-zsh"
-        mkobsidian "jump to the Obsidian vault"
-        mkcontext "open the shared shell context file"
-        codes "jump to ~/Codes"
-        pyqusolver "jump to ~/Codes/QuantumEigenSolver/pyqusolver"
-        qesgen "jump to QuantumEigenSolver/pyqusolver/Python/QES/general_python"
         l "short directory listing"
         ll "long directory listing"
         la "show hidden files too"
         cat "use bat when available"
-        grep "use ripgrep when available"
-        condastat "print current active conda env status"
-        juliastat "print current active julia version status"
+        rgrep "use ripgrep when available"
     )
     custom_function_desc=(
+        codes "jump to the configured code directory"
+        uph_qes_paths "validate optional QuantumEigenSolver configuration"
+        pyqusolver "jump to the configured pyqusolver directory"
+        qesgen "jump to the configured QES general Python directory"
+        uph_edit "open files with EDITOR"
+        uph_obsidian_vault "validate optional Obsidian configuration"
+        zshconfig "open ~/.zshrc"
+        ohmyzsh "open ~/.oh-my-zsh"
+        mkobsidian "jump to the Obsidian vault"
+        mkcontext "open the shared shell context file"
+        open_file "open a file with a desktop app or EDITOR"
         mkcd "create a directory and enter it"
         rscp "rsync wrapper with optional --rm cleanup"
         extract "extract common archive formats"
         mkhelp "show this command reference"
+        condastat "print current active conda environment status"
+        juliastat "print the active Julia version"
         armacmp "compile C++ script with Armadillo linked"
         obsearch "search through Obsidian notes with ripgrep"
         obnew "create a new scientific note in Obsidian vault"
@@ -191,7 +275,7 @@ mkhelp() {
     print ""
     print "Config files"
     print "  active: $custom_source"
-    print "  vault : $vault_source"
+    print "  vault : ${vault_source:-disabled}"
     print ""
     print "Custom aliases"
     for name in $custom_alias_names; do
@@ -234,11 +318,21 @@ mkhelp() {
 # 🚀 Scientific Development & Language Helpers
 # ==========================================
 
-# Active Python/Conda environment status
-alias condastat="echo -e \"Conda Env: \033[1;32m\${CONDA_DEFAULT_ENV:-none}\033[0m (Python: \$(python --version 2>&1 | awk '{print \$2}'))\""
+# Active Python/Conda environment status.
+condastat() {
+    local python_version=unavailable
+    command -v python >/dev/null 2>&1 && python_version="$(python --version 2>&1)"
+    print "Conda Env: ${CONDA_DEFAULT_ENV:-none} ($python_version)"
+}
 
-# Active Julia environment status
-alias juliastat="echo -e \"Julia: \033[1;34m\$(julia --version 2>&1 | awk '{print \$3}')\033[0m\""
+# Active Julia environment status.
+juliastat() {
+    if ! command -v julia >/dev/null 2>&1; then
+        print -u2 "Julia is not installed or not on PATH."
+        return 127
+    fi
+    command julia --version
+}
 
 # Armadillo C++ Compiler Helper
 # Compiles a C++ script with optimized flags (-O3) and links Armadillo
@@ -277,13 +371,13 @@ obsearch() {
         echo "Usage: obsearch <query>"
         return 1
     fi
-    local vault_dir="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"
-    if [[ -d "$vault_dir" ]]; then
-        rg -i --heading --color=always "$1" "$vault_dir"
-    else
-        echo "Obsidian vault path not found."
-        return 1
+    uph_obsidian_vault || return
+    if ! command -v rg >/dev/null 2>&1; then
+        print -u2 "obsearch requires ripgrep (rg)."
+        return 127
     fi
+    local vault_dir="$OBSIDIAN_VAULT"
+    rg -i --heading --color=always "$1" "$vault_dir"
 }
 
 # Create a new markdown note in your vault with a scientific metadata template
@@ -292,11 +386,8 @@ obnew() {
         echo "Usage: obnew <note-title>"
         return 1
     fi
-    local vault_dir="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/PhysicsNotes"
-    if [[ ! -d "$vault_dir" ]]; then
-        echo "Obsidian vault path not found."
-        return 1
-    fi
+    uph_obsidian_vault || return
+    local vault_dir="$OBSIDIAN_VAULT"
     
     local title="$1"
     # Convert title to a safe filename (lower case, hyphens)
@@ -326,17 +417,12 @@ tags: [physics, research]
 EOF
 
     echo "Created note: $filepath"
-    # Open the note immediately
-    if command -v mate >/dev/null 2>&1; then
-        mate "$filepath"
-    else
-        open "$filepath"
-    fi
+    open_file "$filepath"
 }
 
 # ==========================================
 # 🎛️ Load HPC/Slurm-specific local controls
 # ==========================================
-if [[ -f "$HOME/.config/zsh/common-hpc.zsh" ]]; then
-    source "$HOME/.config/zsh/common-hpc.zsh"
+if [[ -r "$UPH_ZSH_CONFIG_DIR/common-hpc.zsh" ]]; then
+    source "$UPH_ZSH_CONFIG_DIR/common-hpc.zsh"
 fi
