@@ -1,6 +1,4 @@
-# Common aliases and helpers intended to be portable across machines.
-
-: "${UPH_ZSH_CONFIG_DIR:=${XDG_CONFIG_HOME:-$HOME/.config}/zsh}"
+# Portable Zsh aliases and small utilities (Linux and macOS).
 
 alias reloadzsh='exec zsh'
 alias cls='clear'
@@ -9,77 +7,6 @@ alias mkdirp='mkdir -p'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
-
-codes() {
-    local codes_dir="${UPH_CODES_DIR:-$HOME/Codes}"
-    if [[ ! -d "$codes_dir" ]]; then
-        print -u2 "Code directory not found: $codes_dir (override UPH_CODES_DIR in $UPH_ZSH_CONFIG_DIR/local.zsh)"
-        return 1
-    fi
-    cd -- "$codes_dir"
-}
-
-uph_qes_paths() {
-    if [[ ${UPH_ENABLE_SOLVER_PATHS:-false} != true ]]; then
-        print -u2 "QuantumEigenSolver helpers are disabled. Set UPH_ENABLE_SOLVER_PATHS=true in $UPH_ZSH_CONFIG_DIR/local.zsh."
-        return 1
-    fi
-}
-
-pyqusolver() {
-    uph_qes_paths || return
-    if [[ ! -d "$QES_PYQUSOLVER_DIR" ]]; then
-        print -u2 "QuantumEigenSolver directory not found: $QES_PYQUSOLVER_DIR"
-        return 1
-    fi
-    cd -- "$QES_PYQUSOLVER_DIR"
-}
-
-qesgen() {
-    uph_qes_paths || return
-    if [[ ! -d "$QES_PYPATH_GEN_PYTHON" ]]; then
-        print -u2 "QuantumEigenSolver general Python directory not found: $QES_PYPATH_GEN_PYTHON"
-        return 1
-    fi
-    cd -- "$QES_PYPATH_GEN_PYTHON"
-}
-
-# Obsidian integration is optional. Enable it in local.zsh with, for example:
-# export OBSIDIAN_VAULT="$HOME/Documents/PhysicsNotes"
-
-uph_obsidian_vault() {
-    if [[ -z ${OBSIDIAN_VAULT:-} ]]; then
-        print -u2 "Obsidian integration is disabled. Set OBSIDIAN_VAULT in $UPH_ZSH_CONFIG_DIR/local.zsh to enable it."
-        return 1
-    fi
-    if [[ ! -d "$OBSIDIAN_VAULT" ]]; then
-        print -u2 "Obsidian vault path not found: $OBSIDIAN_VAULT"
-        return 1
-    fi
-}
-
-uph_edit() {
-    local -a editor_command
-    editor_command=(${(z)${EDITOR:-nano}})
-    command "${editor_command[@]}" "$@"
-}
-
-zshconfig() {
-    uph_edit "$HOME/.zshrc"
-}
-
-ohmyzsh() {
-    uph_edit "$HOME/.oh-my-zsh"
-}
-
-mkcontext() {
-    uph_edit "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
-}
-
-mkobsidian() {
-    uph_obsidian_vault || return
-    cd -- "$OBSIDIAN_VAULT"
-}
 
 if command -v eza >/dev/null 2>&1; then
     alias l='eza -1 --group-directories-first'
@@ -91,25 +18,21 @@ else
     alias la='ls -la'
 fi
 
-if command -v bat >/dev/null 2>&1; then
-    alias cat='bat --paging=never'
-fi
+# Open FILE in $EDITOR (which may carry arguments, e.g. "code --wait").
+uph_edit() {
+    local -a editor_command
+    editor_command=(${(z)${EDITOR:-nano}})
+    command "${editor_command[@]}" "$@"
+}
 
-if command -v rg >/dev/null 2>&1; then
-    alias rgrep='rg'
-fi
-
+# Open FILE with the desktop default application, else in the editor.
 open_file() {
-    local file="$1"
-
-    if command -v code >/dev/null 2>&1; then
-        command code "$file"
-    elif command -v xdg-open >/dev/null 2>&1; then
-        command xdg-open "$file" >/dev/null 2>&1 &!
+    if command -v xdg-open >/dev/null 2>&1; then
+        command xdg-open "$1" >/dev/null 2>&1 &!
     elif command -v open >/dev/null 2>&1; then
-        command open "$file"
+        command open "$1"
     else
-        uph_edit "$file"
+        uph_edit "$1"
     fi
 }
 
@@ -117,7 +40,7 @@ mkcd() {
     mkdir -p -- "$1" && cd -- "$1"
 }
 
-# Unified rsync wrapper: copy by default, move with --rm.
+# rsync wrapper: copy by default (never overwrites existing files), move with --rm.
 rscp() {
     local delete_flag=0
     local ssh_port=22
@@ -137,7 +60,7 @@ rscp() {
     done
 
     if [[ $# -lt 2 ]]; then
-        echo "Error: missing arguments. Use -h for help."
+        echo "Error: missing arguments. Use -h for help." >&2
         return 1
     fi
 
@@ -147,13 +70,7 @@ rscp() {
     [[ "$src" == "~"* ]] && src="${src/#\~/$HOME}"
     [[ "$dst" == "~"* ]] && dst="${dst/#\~/$HOME}"
 
-    local opts=(
-        -avh
-        --ignore-existing
-        --progress
-        -e "ssh -p $ssh_port"
-    )
-
+    local opts=(-avh --ignore-existing --progress -e "ssh -p $ssh_port")
     local delete_opt=()
     [[ $delete_flag -eq 1 ]] && delete_opt=(--remove-source-files)
 
@@ -162,25 +79,22 @@ rscp() {
     local rc=$?
 
     if [[ $rc -ne 0 ]]; then
-        echo -e "\033[1;31mError:\033[0m rsync failed (exit code $rc)"
+        echo -e "\033[1;31mError:\033[0m rsync failed (exit code $rc)" >&2
         return $rc
     fi
 
     if [[ $delete_flag -eq 1 ]]; then
-        echo -e "\033[1;33mCleaning empty directories...\033[0m"
         if [[ "$src" != *":"* ]]; then
             find "$src" -type d -empty -delete
         else
-            local host="${src%%:*}"
-            local path="${src#*:}"
-            ssh -p "$ssh_port" "$host" "find \"$path\" -type d -empty -delete"
+            ssh -p "$ssh_port" "${src%%:*}" "find \"${src#*:}\" -type d -empty -delete"
         fi
     fi
 }
 
 extract() {
     if [[ -z "$1" || ! -f "$1" ]]; then
-        echo "Usage: extract <archive>"
+        echo "Usage: extract <archive>" >&2
         return 1
     fi
 
@@ -194,235 +108,6 @@ extract() {
         *.xz) unxz "$1" ;;
         *.zip) unzip "$1" ;;
         *.7z) 7z x "$1" ;;
-        *.rar) unrar x "$1" ;;
-        *) echo "extract: unsupported archive type: $1"; return 1 ;;
+        *) echo "extract: unsupported archive type: $1" >&2; return 1 ;;
     esac
 }
-
-mkhelp() {
-    local mode="${1:-summary}"
-    local custom_source="$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
-    local vault_source="${OBSIDIAN_VAULT:+$OBSIDIAN_VAULT/common-aliases.zsh}"
-    local name
-    local -a alias_names function_names custom_alias_names custom_function_names other_aliases other_functions
-    typeset -A custom_alias_desc custom_function_desc
-
-    custom_alias_names=(
-        reloadzsh cls path mkdirp .. ... ....
-        l ll la cat rgrep
-    )
-    custom_function_names=(codes uph_qes_paths pyqusolver qesgen uph_edit uph_obsidian_vault zshconfig ohmyzsh mkobsidian mkcontext open_file mkcd rscp extract mkhelp condastat juliastat armacmp obsearch obnew)
-
-    custom_alias_desc=(
-        reloadzsh "reload the current zsh session"
-        cls "clear the terminal"
-        path "print PATH entries one per line"
-        mkdirp "mkdir -p shorthand"
-        .. "go up one directory"
-        ... "go up two directories"
-        .... "go up three directories"
-        l "short directory listing"
-        ll "long directory listing"
-        la "show hidden files too"
-        cat "use bat when available"
-        rgrep "use ripgrep when available"
-    )
-    custom_function_desc=(
-        codes "jump to the configured code directory"
-        uph_qes_paths "validate optional QuantumEigenSolver configuration"
-        pyqusolver "jump to the configured pyqusolver directory"
-        qesgen "jump to the configured QES general Python directory"
-        uph_edit "open files with EDITOR"
-        uph_obsidian_vault "validate optional Obsidian configuration"
-        zshconfig "open ~/.zshrc"
-        ohmyzsh "open ~/.oh-my-zsh"
-        mkobsidian "jump to the Obsidian vault"
-        mkcontext "open the shared shell context file"
-        open_file "open a file with a desktop app or EDITOR"
-        mkcd "create a directory and enter it"
-        rscp "rsync wrapper with optional --rm cleanup"
-        extract "extract common archive formats"
-        mkhelp "show this command reference"
-        condastat "print current active conda environment status"
-        juliastat "print the active Julia version"
-        armacmp "compile C++ script with Armadillo linked"
-        obsearch "search through Obsidian notes with ripgrep"
-        obnew "create a new scientific note in Obsidian vault"
-    )
-
-    alias_names=(${(ok)aliases})
-    function_names=(${(ok)functions})
-    function_names=(${function_names:#_OMZ*})
-    function_names=(${function_names:#_*})
-    function_names=(${function_names:#precmd})
-    function_names=(${function_names:#preexec})
-    function_names=(${function_names:#zshexit})
-    function_names=(${function_names:#chpwd})
-
-    other_aliases=($alias_names)
-    for name in $custom_alias_names; do
-        other_aliases=(${other_aliases:#$name})
-    done
-
-    other_functions=($function_names)
-    for name in $custom_function_names; do
-        other_functions=(${other_functions:#$name})
-    done
-
-    print "=============================="
-    print "mkhelp: shell command reference"
-    print "=============================="
-    print ""
-    print "Config files"
-    print "  active: $custom_source"
-    print "  vault : ${vault_source:-disabled}"
-    print ""
-    print "Custom aliases"
-    for name in $custom_alias_names; do
-        [[ -n ${aliases[$name]-} ]] || continue
-        printf '  %-10s  %-38s %s\n' "$name" "${custom_alias_desc[$name]}" "-> ${aliases[$name]}"
-    done
-    print ""
-    print "Custom functions"
-    for name in $custom_function_names; do
-        (( ${+functions[$name]} )) || continue
-        printf '  %-10s  %s\n' "$name" "${custom_function_desc[$name]}"
-    done
-    print ""
-    print "Active plugins"
-    print "  ${plugins[*]}"
-    print ""
-    printf 'Loaded totals: %d aliases, %d functions\n' "${#alias_names}" "${#function_names}"
-    printf 'Custom totals: %d aliases, %d functions\n' "${#custom_alias_names}" "${#custom_function_names}"
-
-    if [[ "$mode" != "all" ]]; then
-        print ""
-        print "Run 'mkhelp all' for the full live-shell alias/function inventory."
-        return 0
-    fi
-
-    print ""
-    print "Other aliases from oh-my-zsh/plugins/current shell"
-    for name in $other_aliases; do
-        printf '  %-18s %s\n' "$name" "${aliases[$name]}"
-    done
-
-    print ""
-    print "Other functions from oh-my-zsh/plugins/current shell"
-    for name in $other_functions; do
-        printf '  %s\n' "$name"
-    done
-}
-
-# ==========================================
-# 🚀 Scientific Development & Language Helpers
-# ==========================================
-
-# Active Python/Conda environment status.
-condastat() {
-    local python_version=unavailable
-    command -v python >/dev/null 2>&1 && python_version="$(python --version 2>&1)"
-    print "Conda Env: ${CONDA_DEFAULT_ENV:-none} ($python_version)"
-}
-
-# Active Julia environment status.
-juliastat() {
-    if ! command -v julia >/dev/null 2>&1; then
-        print -u2 "Julia is not installed or not on PATH."
-        return 127
-    fi
-    command julia --version
-}
-
-# Armadillo C++ Compiler Helper
-# Compiles a C++ script with optimized flags (-O3) and links Armadillo
-armacmp() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: armacmp <source_file.cpp>"
-        return 1
-    fi
-    local src="$1"
-    local out="${src%.cpp}.out"
-    local -a include_flags=()
-
-    if [[ -n "$ARMADILLO_INCL_DIR" ]]; then
-        if [[ ! -d "$ARMADILLO_INCL_DIR" ]]; then
-            echo "Configured Armadillo include directory does not exist: $ARMADILLO_INCL_DIR"
-            return 1
-        fi
-        include_flags=(-I "$ARMADILLO_INCL_DIR")
-    fi
-
-    echo -e "\033[1;34mCompiling:\033[0m g++ -O3 -std=c++17 ${include_flags[*]} \"$src\" -o \"$out\" -larmadillo"
-    g++ -O3 -std=c++17 "${include_flags[@]}" "$src" -o "$out" -larmadillo
-    
-    if [[ $? -eq 0 ]]; then
-        echo -e "\033[1;32mCompilation successful!\033[0m Executable: ./$out"
-    fi
-}
-
-# ==========================================
-# 📓 Obsidian vault integration
-# ==========================================
-
-# Search your physics and scientific notes vault using ripgrep
-obsearch() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: obsearch <query>"
-        return 1
-    fi
-    uph_obsidian_vault || return
-    if ! command -v rg >/dev/null 2>&1; then
-        print -u2 "obsearch requires ripgrep (rg)."
-        return 127
-    fi
-    local vault_dir="$OBSIDIAN_VAULT"
-    rg -i --heading --color=always "$1" "$vault_dir"
-}
-
-# Create a new markdown note in your vault with a scientific metadata template
-obnew() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: obnew <note-title>"
-        return 1
-    fi
-    uph_obsidian_vault || return
-    local vault_dir="$OBSIDIAN_VAULT"
-    
-    local title="$1"
-    # Convert title to a safe filename (lower case, hyphens)
-    local filename=$(echo "$title" | tr ' ' '-' | tr '[:upper:]' '[:lower:]').md
-    local filepath="$vault_dir/$filename"
-    
-    if [[ -f "$filepath" ]]; then
-        echo "Note '$filename' already exists."
-        return 1
-    fi
-    
-    # Write YAML frontmatter
-    cat <<EOF > "$filepath"
----
-title: "$title"
-date: $(date +"%Y-%m-%d %H:%M:%S")
-tags: [physics, research]
----
-
-# $title
-
-## Abstract
-
-
-## Discussion
-
-EOF
-
-    echo "Created note: $filepath"
-    open_file "$filepath"
-}
-
-# ==========================================
-# 🎛️ Load HPC/Slurm-specific local controls
-# ==========================================
-if [[ -r "$UPH_ZSH_CONFIG_DIR/common-hpc.zsh" ]]; then
-    source "$UPH_ZSH_CONFIG_DIR/common-hpc.zsh"
-fi

@@ -1,432 +1,137 @@
 # Unix Profile Helpers
 
-Portable shell helpers for local Unix profiles and remote HPC/Slurm sessions.
-
-The remote HPC layer is intentionally generic. Shared files should not contain private project paths, account names, cluster-specific module versions, or project environments.
+Portable shell helpers for Linux and macOS workstations and for Slurm login nodes. Cluster choices live in declarative `HPC_*` profile files, which the shell helpers and `shub` (GUI and TUI) read through the same loader. The shared files contain no site-specific values.
 
 ## Files
 
-- `zshrc`: local workstation Zsh profile.
-- `common-aliases.zsh`: local shell aliases and small utilities.
-- `common-hpc.zsh`: local helpers for remote HPC access and syncing.
-- `common-slurm.zsh`: remote Slurm, module, scratch/quota, and diagnostic helpers. Deploy it as `~/.config/hpc/common-slurm.sh`.
-- `common-run.sh`: generic run-directory, logging, manifest, Git metadata, and status JSON helpers.
-- `deploy.sh`: local and remote deployment helper.
-- `scripts/validate-hpc-helpers.sh`: syntax and smoke-test validation for the remote helper layer.
+- `common-profile.sh`: profile loader, defaults, `hpc_env_apply`. Bash and Zsh.
+- `profiles/example.sh`: documented example profile; copy it to `<cluster>.sh`.
+- `common-slurm.sh`: `hpcprofile`, queue and job helpers, interactive allocations, sbatch template, module and scratch helpers. Bash and Zsh.
+- `common-run.sh`: run directories with logs, manifest, Git metadata and `status.json`. Bash and Zsh.
+- `common-safety.sh`: safe interactive defaults. Bash and Zsh; sourceable on its own.
+- `zshrc`, `common-aliases.zsh`, `local.zsh.example`: local Zsh setup.
+- `deploy.sh`: local install and, optionally, remote install.
+- `scripts/remote-setup.sh`: install, remove or inspect the helpers on a login node.
+- `scripts/install-font.sh`: install a monospace terminal font for the current user.
+- `scripts/profile-dump.sh`: serializer used by `shub`; emits `KEY<TAB>base64(value)`, array keys repeated.
+- `scripts/validate-hpc-helpers.sh`: syntax checks and smoke tests.
 
-Local-only files on each cluster:
-
-- `~/.config/hpc/local.sh`: cluster/account/module/scratch defaults. Deployments preserve this file.
-- `~/.config/hpc/envs/*.sh`: project-specific environments, repositories, virtual environments, and caches.
-
-## What To Do First
-
-The base profile requires Zsh. Everything else—including Oh My Zsh, Obsidian,
-scientific-project paths, and HPC shortcuts—is optional.
-
-1. Check that Zsh is available:
-
-   ```bash
-   zsh --version
-   ```
-
-   On Ubuntu, install it when necessary:
-
-   ```bash
-   sudo apt update
-   sudo apt install zsh
-   ```
-
-   Current macOS releases include Zsh. To make it your login shell on either
-   platform, run `chsh -s "$(command -v zsh)"`, then log out and back in.
-
-2. Decide whether to use Oh My Zsh. It is not required. If you want it, install
-   it **before** running this repository's deployer because its installer may
-   replace an existing `~/.zshrc`:
-
-   ```bash
-   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-   ```
-
-3. Clone this repository and deploy:
-
-   ```bash
-   git clone https://github.com/makskliczkowski/unix-profile-helpers.git
-   cd unix-profile-helpers
-   ./deploy.sh
-   ```
-
-   The deployer backs up and replaces `~/.zshrc`,
-   `~/.config/zsh/common-aliases.zsh`, and
-   `~/.config/zsh/common-hpc.zsh`. It creates
-   `~/.config/zsh/local.zsh` once and preserves that file on later deployments.
-   When `XDG_CONFIG_HOME` is set, its `zsh` directory is used instead of
-   `~/.config/zsh` everywhere.
-
-4. Validate and start the profile:
-
-   ```bash
-   zsh -n ~/.zshrc
-   exec zsh
-   ```
-
-5. Put machine-specific choices in `~/.config/zsh/local.zsh`, never in the
-   shared files. Start with no overrides; add only the integrations you use.
-
-## Optional Local Features
-
-### Editor
-
-The profile respects an existing `EDITOR`. Otherwise it selects `nano` or `vi`
-over SSH and prefers VS Code, Neovim, `nano`, then `vi` locally. Override it in
-`~/.config/zsh/local.zsh` when desired:
-
-```zsh
-export EDITOR='code --wait'
-export VISUAL="$EDITOR"
-```
-
-### Oh My Zsh Plugins
-
-The profile automatically enables the bundled `docker`, `asdf`, and `zoxide`
-plugins when their commands exist. It also detects these third-party plugin
-directories without failing when they are absent:
-
-- `zsh-autosuggestions`
-- `zsh-history-substring-search`
-- `fast-syntax-highlighting`
-- `zsh-completions`
-
-To install all four after installing Oh My Zsh:
-
-```zsh
-plugin_dir="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"
-mkdir -p "$plugin_dir"
-git clone https://github.com/zsh-users/zsh-autosuggestions "$plugin_dir/zsh-autosuggestions"
-git clone https://github.com/zsh-users/zsh-history-substring-search "$plugin_dir/zsh-history-substring-search"
-git clone https://github.com/zdharma-continuum/fast-syntax-highlighting "$plugin_dir/fast-syntax-highlighting"
-git clone https://github.com/zsh-users/zsh-completions "$plugin_dir/zsh-completions"
-```
-
-Add other installed Oh My Zsh plugins in `local.zsh`:
-
-```zsh
-typeset -ga UPH_EXTRA_PLUGINS=(kubectl)
-```
-
-Missing extra plugins are skipped with a startup message. Set `ZSH` in
-`local.zsh` if Oh My Zsh is installed outside `~/.oh-my-zsh`, and set
-`ZSH_THEME` there to change the default `agnoster` theme.
-
-### Optional Command-Line Tools
-
-No tool in this list is required for shell startup:
-
-- `eza` enhances `l`, `ll`, and `la`; ordinary `ls` is the fallback.
-- `bat` enhances interactive `cat`; ordinary `cat` remains unchanged otherwise.
-- `rg` enables `rgrep` and is required by `obsearch`. It never replaces `grep`.
-- `zoxide`, `asdf`, and `docker` enable their Oh My Zsh plugins when both Oh My
-  Zsh and the corresponding command are installed.
-- `$HOME/.local/bin`, `$HOME/.juliaup/bin`, and existing Homebrew directories
-  are added to `PATH` only when present.
-- Conda is initialized lazily on first use from common Miniforge, Miniconda,
-  Anaconda, or Homebrew locations.
-
-### Obsidian
-
-Choose Obsidian setup in `./deploy.sh`, or enable it later in `local.zsh`:
-
-```zsh
-export OBSIDIAN_VAULT="$HOME/Documents/PhysicsNotes"
-```
-
-Leave the variable unset to disable the integration. `mkobsidian`, `obsearch`,
-and `obnew` remain harmless and explain how to enable it when called.
-
-### Code and QuantumEigenSolver Paths
-
-The `codes` helper defaults to `$HOME/Codes`. Override it when needed:
-
-```zsh
-export UPH_CODES_DIR="$HOME/src"
-```
-
-QuantumEigenSolver integration is disabled by default. Enable and configure it
-only on machines containing that project:
-
-```zsh
-UPH_ENABLE_SOLVER_PATHS=true
-export QES_ROOT="$HOME/Codes/QuantumEigenSolver"
-```
-
-This derives `QES_PYQUSOLVER_DIR`, `QES_PYPATH`,
-`QES_PYPATH_GEN_PYTHON`, and `QES_SLURMPATH`. Override any derived value below
-`QES_ROOT` in `local.zsh` when the repository layout differs.
-
-### Local HPC Shortcuts
-
-The generic `hpc-sync-to SOURCE USER@HOST:PATH` helper needs only `rsync` and
-SSH. These convenience shortcuts are disabled until configured in `local.zsh`:
-
-```zsh
-export UPH_HPC_HOST="my-cluster"  # SSH config host or user@host
-export UPH_QES_REMOTE="my-cluster:~/path/to/pyqusolver/"
-```
-
-`UPH_HPC_HOST` enables `hpclogin`. `UPH_QES_REMOTE` enables `qessync` when the
-QuantumEigenSolver paths above are also enabled.
-
-### Armadillo Compiler Helper
-
-`armacmp FILE.cpp` requires `g++` and the Armadillo library. Normally its
-system include path needs no configuration. For a custom installation, set:
-
-```zsh
-export ARMADILLO_INCL_DIR="$HOME/path/to/armadillo/include"
-```
-
-## Remote Deployment
-
-Run `./deploy.sh` and opt into remote deployment at the final prompt, or update
-only a remote machine later:
+## Quick start
 
 ```bash
-./deploy.sh --remote-only
+git clone https://github.com/makskliczkowski/unix-profile-helpers.git
+cd unix-profile-helpers
+./deploy.sh
 ```
 
-Remote deployment requires `ssh` and `scp`. It creates and preserves the
-cluster-local override file `~/.config/hpc/local.sh`.
+`deploy.sh` backs up and replaces `~/.zshrc` and the files under `~/.config/zsh/`, creates `~/.config/zsh/local.zsh` and an example profile once, and installs `common-profile.sh` under `~/.config/hpc/`. Machine-specific choices go in `local.zsh`, cluster choices in a profile. Oh My Zsh is optional; install it before running the deployer, because its installer may replace `~/.zshrc`.
 
-The initial remote prompt controls copying and configuring the remote helpers.
-SSH-key authorization is a separate opt-in; when accepted, it appends the
-selected local public key to the remote `~/.ssh/authorized_keys`. Declining it
-still allows password-based deployment. The deployer then asks which remote
-profile, `.bashrc` or `.zshrc`, to update and verifies the installed helpers before
-reporting success.
+## Profiles
 
-## Deploy Remote Helpers Manually
+A profile is a trusted local shell fragment containing assignments only. It is looked up as `$HPC_PROFILE_DIR/<name>.sh` (default `~/.config/hpc/profiles`) or given as an explicit `.sh` path. A profile describes the account on a cluster. Optional run presets live beside it as `<name>.d/<run>.sh`, hold only the keys they override, and are selected with `<name>:<run>`.
 
 ```bash
-ssh user@cluster 'mkdir -p ~/.config/hpc'
-scp common-slurm.zsh user@cluster:~/.config/hpc/common-slurm.sh
-scp common-run.sh user@cluster:~/.config/hpc/common-run.sh
+. ~/.config/hpc/common-profile.sh
+hpc_profile_load mycluster:gpu
+hpc_profile_show
 ```
 
-Source them from the remote shell profile:
+`common-slurm.sh` adds the `hpcprofile list|use NAME|show|path|dir` command. `HPC_PROFILE` selects a profile when the helpers are sourced, otherwise `default.sh` is loaded if present. `HPC_PROFILE_AUTOLOAD=0` disables this. Use `~` instead of `$HOME` in path values: the profile is sourced locally, so `$HOME` would expand to the local home.
 
-```bash
-if [ -f "$HOME/.config/hpc/common-slurm.sh" ]; then
-    . "$HOME/.config/hpc/common-slurm.sh"
-fi
-if [ -f "$HOME/.config/hpc/common-run.sh" ]; then
-    . "$HOME/.config/hpc/common-run.sh"
-fi
-```
+### Schema
 
-## Local Cluster Configuration
+Scalars:
 
-Put cluster-specific values in `~/.config/hpc/local.sh`:
+| Key | Meaning |
+| --- | --- |
+| `HPC_NAME`, `HPC_DESCRIPTION`, `HPC_NOTES` | Identifier (usually the file stem), summary, free-form notes. |
+| `HPC_SSH_HOST` | `~/.ssh/config` alias or hostname. |
+| `HPC_SSH_USER`, `HPC_SSH_PORT`, `HPC_SSH_PROXYJUMP`, `HPC_SSH_IDENTITY` | Optional connection details added to the alias. |
+| `HPC_SLURM_ACCOUNT` | Project (billing) account; distinct from the login user. |
+| `HPC_SLURM_PARTITION`, `HPC_SLURM_QOS`, `HPC_SLURM_TIME`, `HPC_SLURM_MEM`, `HPC_SLURM_CPUS`, `HPC_SLURM_NODES` | Scheduler defaults. |
+| `HPC_SLURM_GPUS` | GPU count or GRES, for example `1` or `a100:2`. |
+| `HPC_SLURM_GPU_STYLE` | `gres` (default), `gpus` or `gpus-per-node`. |
+| `HPC_SLURM_MAIL` | Address for `--mail-user`; adds `--mail-type=END,FAIL`. |
+| `HPC_ENV_INIT` | Snippet that makes `module` available when it is a shell function. |
+| `HPC_ENV_PURGE` | `true` (default) runs `module purge` before loading modules. |
+| `HPC_ENV_CONDA` | Conda environment name or prefix, activated after the modules. |
+| `HPC_SCRATCH_DIR`, `HPC_QUOTA_GROUP` | Scratch location and quota group for the storage helpers. |
+| `HPC_SHELL`, `HPC_WORKDIR`, `HPC_PYTHON` | Interactive shell, remote working directory, Python executable. |
+| `HPC_JUPYTER_CMD`, `HPC_JUPYTER_IP`, `HPC_JUPYTER_PORT` | Jupyter command (`jupyter lab`), bind address (`0.0.0.0`), preferred port (`0` picks a free one). |
+| `HPC_TERM_BASHRC` | `true` (default) or `false`: whether a shub terminal sources `~/.bashrc`. |
 
-```sh
-export UPH_SLURM_ACCOUNT="my-account"
-export UPH_SLURM_PARTITION="normal"
-export UPH_SLURM_QOS=""
-export UPH_SLURM_CPUS="4"
-export UPH_SLURM_TIME="01:00:00"
-export UPH_SLURM_MEMORY="4G"
-export UPH_SLURM_GRES="gpu:1"
-export UPH_INTERACTIVE_SHELL="/bin/bash"
+Arrays: `HPC_SSH_OPTIONS`, `HPC_SLURM_EXTRA` (raw `sbatch` options), `HPC_ENV_MODULES`, `HPC_ENV_SOURCE` (files sourced after modules and conda), `HPC_ENV_VARS` (`KEY=VALUE`), `HPC_ENV_PRE` (commands), `HPC_JUPYTER_EXTRA`, `HPC_TERM_SOURCE` (extra files sourced at shub terminal start).
 
-export UPH_SCRATCH_DIR="/path/to/scratch"
-export UPH_QUOTA_GROUP="my-account"
+### What is exported
 
-export UPH_MODULE_SLURM="slurm"
-export UPH_MODULE_COMPILER="compiler-module"
-export UPH_MODULE_MPI="mpi-module"
-export UPH_MODULE_HDF5="hdf5-module"
-export UPH_MODULE_PYTHON="python-module"
-export UPH_MODULE_JULIA="julia-module"
-export UPH_MODULE_CMAKE="cmake-module"
-export UPH_MODULE_CONTAINER="container-module"
-export UPH_MODULE_BLAS="blas-module"
-export UPH_MODULE_BOOST="boost-module"
-export UPH_MODULE_NETCDF="netcdf-module"
-```
+Loading a profile sets the `HPC_*` values as plain shell variables, which are enough for the functions in the same shell and are not visible to child processes. Only `HPC_PROFILE` and `HPC_PROFILE_RUN` are exported, so that a child shell selects the same profile and run preset. Account names, paths and other values therefore never leak into unrelated programs.
 
-All cluster values are optional. Unset scheduler options are omitted from
-generated commands; unset module mappings are skipped. Begin with the account,
-partition, scratch directory, and only the module names your cluster actually
-provides. `modset --persist PROFILE MODULE` can add mappings later without
-manually editing the file.
+Entries of `HPC_ENV_VARS` are exported only by `hpc_env_apply`, which the shub terminal, a job script or the user calls explicitly. Sourcing a helper file never does it. The function runs in the current shell in this order: `HPC_ENV_INIT`, `module purge`, modules, conda, `HPC_ENV_SOURCE` files, `HPC_ENV_VARS`, `HPC_ENV_PRE`. It stops at the first failing step. Each `HPC_ENV_VARS` entry is `KEY=VALUE` and is exported with its value quoted, so values with spaces work. A leading `~`, `$VAR` and `${VAR}` expand; command substitution and arithmetic do not, so a profile value cannot run code through this path. `HPC_ENV_SOURCE` paths get the same expansion. `HPC_ENV_INIT` and `HPC_ENV_PRE` are shell code by design.
 
-Use `~/.config/hpc/envs/myproject.sh` for project-specific setup:
+## Remote helpers
 
-```sh
-export UPH_PROJECT_NAME="myproject"
-export MYPROJECT_REPO="$HOME/path/to/myproject"
-export MYPROJECT_VENV="$MYPROJECT_REPO/.venv"
-
-export UPH_PROJECT_ROOT="${UPH_SCRATCH_ROOT:-$HOME/scratch}/Projects/$UPH_PROJECT_NAME"
-export UPH_RUN_ROOT="$UPH_PROJECT_ROOT/runs"
-export UPH_LOG_ROOT="$UPH_PROJECT_ROOT/logs"
-export UPH_TMP_ROOT="$UPH_PROJECT_ROOT/tmp"
-export UPH_CACHE_ROOT="$UPH_PROJECT_ROOT/cache"
-export UPH_CHECKPOINT_ROOT="$UPH_PROJECT_ROOT/checkpoints"
-
-mkdir -p "$UPH_RUN_ROOT" "$UPH_LOG_ROOT" "$UPH_TMP_ROOT" \
-    "$UPH_CACHE_ROOT" "$UPH_CHECKPOINT_ROOT"
-
-if [ -d "$MYPROJECT_VENV" ]; then
-    . "$MYPROJECT_VENV/bin/activate"
-fi
-```
-
-## Slurm Helpers
-
-Queue and accounting:
-
-```bash
-sq
-sqr
-sqn
-sac
-jobeff <job_id>
-jobtop <job_id>
-```
-
-Interactive allocations:
-
-```bash
-inter -c 8 -t 01:00:00 -m 16G
-inter -c 16 -t 01:00:00 -g gpu:1
-salloc_quick 4 02:00:00 normal
-```
-
-Templates:
-
-```bash
-mkslurm job.sh
-mkslurm_cockpit cockpit-job.sh
-```
-
-`mkslurm` creates a minimal Slurm script. It does not purge or load modules. It includes only commented examples such as:
-
-```bash
-# Optional modules:
-# modload cpp mpi hdf5 python
-```
-
-## Module Helpers
-
-Map generic profiles to local module names:
-
-```bash
-modset --persist cpp compiler-module
-modset --persist mpi mpi-module
-modset --persist hdf5 hdf5-module
-modset --persist python python-module
-```
-
-Load profiles:
-
-```bash
-modload cpp mpi hdf5 python
-modload science
-```
-
-Inspect mappings:
-
-```bash
-modget
-modget hdf5
-modunset --persist hdf5
-```
-
-## Scratch and Quota Helpers
-
-```bash
-lustreinfo
-hpc_find_scratch
-mkscratch
-myquota
-hpcdoctor
-```
-
-Scratch detection uses `UPH_SCRATCH_DIR`, common environment variables such as `SCRATCH` and `WORK`, common user scratch paths, and detected Lustre mounts. Set `UPH_SCRATCH_DIR` in `local.sh` when the cluster uses a project-specific layout.
-
-Set `UPH_QUOTA_GROUP` when the filesystem reports group quotas rather than user quotas.
-
-## Run Helpers
-
-`common-run.sh` does not require Slurm.
-
-```bash
-uph_make_run_dir test
-uph_write_manifest echo hello
-uph_json_status running
-uph_write_git_manifest
-```
-
-Run a command with standard logs and status files:
-
-```bash
-uph_run example ./solver --input input.dat
-```
-
-Default layout:
+`scripts/remote-setup.sh` installs the Bash-compatible subset (`common-profile.sh`, `common-slurm.sh`, `common-run.sh`, `common-safety.sh`) into `~/.config/hpc/` and keeps one marked block in `~/.bashrc`:
 
 ```text
-$UPH_RUN_ROOT/<name>_<run_id>/
-  logs/stdout.log
-  logs/stderr.log
-  output/
-  tmp/
-  status.json
-  result.json
-  manifest.txt
-  git.txt
+# >>> sHub(bard) hpc helpers >>>
+...
+# <<< sHub(bard) hpc helpers <<<
 ```
-
-Run-root defaults:
-
-1. `UPH_SCRATCH_ROOT`
-2. `UPH_SCRATCH_DIR`
-3. `hpc_find_scratch`
-4. `$HOME/scratch`
-
-## Cockpit-Compatible Template
-
-Generate a structured Slurm script:
 
 ```bash
-mkslurm_cockpit run-example.sh
+scripts/remote-setup.sh install   [--dry-run] [--from DIR]
+scripts/remote-setup.sh uninstall [--dry-run]
+scripts/remote-setup.sh status    [--from DIR]
 ```
 
-The generated script:
+`install` is idempotent; a re-run replaces the block in place. Before the first change `~/.bashrc` is copied once to `~/.bashrc.shub-backup`. `uninstall` removes exactly that block and the four files, and leaves profiles, the backup and the rest of `~/.bashrc` alone. It refuses to edit a `~/.bashrc` whose block markers are unbalanced. `--dry-run` writes nothing. `--from DIR` names the directory holding the source files (default: the repository), which allows streaming to a temporary directory on the login node, as `deploy.sh` does:
 
-- sources `common-slurm.sh` and `common-run.sh`,
-- creates `RUN_DIR`, `LOG_DIR`, `OUTPUT_DIR`, and `TMP_DIR`,
-- writes `manifest.txt`, `git.txt`, and `status.json`,
-- redirects workload stdout/stderr to `logs/stdout.log` and `logs/stderr.log`,
-- writes a placeholder `result.json`,
-- preserves the workload exit code.
+```bash
+tar -C unix-profile-helpers -cf - common-*.sh scripts/remote-setup.sh |
+    ssh cluster 'd=$(mktemp -d) && tar -xf - -C "$d" && sh "$d/scripts/remote-setup.sh" install --from "$d"; rm -rf "$d"'
+```
+
+Every command prints one `key=value` per line. `status` reports `dir`, `bashrc`, `block` (`present`/`absent`), `backup`, `file.<name>` (`present`/`missing`), `installed` (`yes`/`partial`/`no`) and `up_to_date` (`yes`/`no`/`unknown`, comparing against `--from`). `install` and `uninstall` report `block`, `backup` and `file.<name>` outcomes, preceded by `dry_run=1` in a dry run.
+
+`./deploy.sh --remote-only` asks for an SSH address, optionally authorizes your public key, and runs the installer this way. Cluster profiles are not copied; create them in `~/.config/hpc/profiles/` on the remote account or through shub.
+
+## Safety defaults
+
+`common-safety.sh` applies to interactive shells only and is loaded by `zshrc` and by the remote block. `UPH_SAFE=0` disables it.
+
+- `umask 077`, so new files are private. Set `UPH_UMASK=027` to share with a group.
+- Commands typed with a leading space stay out of the history. Type secrets that way, or read them with `read -rs VAR`; never put tokens on a command line or in a profile.
+- `set -o noclobber`: `>` refuses to overwrite an existing file; use `>|` to force.
+- `cp -i`, `mv -i`, and `rm -I` (`rm -i` where unsupported) ask before destroying data.
+
+## Terminal font
+
+```bash
+scripts/install-font.sh             # JetBrains Mono, current user, no sudo
+scripts/install-font.sh --dry-run
+scripts/install-font.sh --uninstall
+```
+
+The font (SIL OFL 1.1) comes from the official GitHub release over https into `~/.local/share/fonts` (then `fc-cache`) or `~/Library/Fonts`. The project publishes no checksum, so the download's SHA-256 is printed; pass `--sha256 HASH` to require a match. Re-running with the same `--version` does nothing. Select "JetBrains Mono" in the terminal's preferences afterwards.
+
+## Slurm, modules and runs
+
+`hpchelp` lists the commands. In short: `sq`, `sqr`, `sqc`, `sqn`, `sac`, `jobeff`, `jobtop`, `slog`; `inter` and `salloc_quick` allocate with the profile's defaults, options override them; `mkslurm FILE` writes an sbatch template from the profile; `modload` loads the profile's modules or the ones given, `mod ARGS` runs `module ARGS` after initializing it; `hpc_find_scratch`, `mkscratch`, `myquota`, `hpcdoctor`. Put real module names in `HPC_ENV_MODULES`; there is no generic-to-site mapping.
+
+`common-run.sh` does not need Slurm. `uph_run NAME CMD...` creates `$HPC_RUN_ROOT/<name>_<id>/{logs,output,tmp}` with `manifest.txt`, `git.txt` and `status.json`, runs the command with stdout and stderr logged, and keeps its exit status. The run root is `HPC_RUN_ROOT`, else `HPC_SCRATCH_DIR/runs`, else a detected scratch directory, else `~/scratch/runs`.
+
+## Local Zsh
+
+`zshrc` sets history, completion, `PATH` and `EDITOR`, and enables Oh My Zsh plugins only when they are installed. `common-aliases.zsh` holds small utilities: `ll`/`la` (via `eza` when present), `mkcd`, `extract`, `open_file`, and `rscp`, an rsync wrapper that never overwrites existing files (`--rm` moves instead of copying). Extra plugins: `typeset -ga UPH_EXTRA_PLUGINS=(kubectl)` in `local.zsh`.
 
 ## Validation
-
-Run:
 
 ```bash
 scripts/validate-hpc-helpers.sh
 ```
 
-It checks:
-
-- `bash -n common-run.sh`
-- `bash -n common-slurm.zsh`
-- `zsh -n common-slurm.zsh` when `zsh` is available
-- `shellcheck common-run.sh common-slurm.zsh` when `shellcheck` is available
-- sourceability and a temporary run-directory smoke test
+It checks Bash syntax of every shell file, Zsh syntax and the Zsh code paths when `zsh` is installed, `shellcheck` when available, profile loading, run presets, the export policy, `hpc_env_apply` ordering and expansion, the `profile-dump.sh` round trip including the terminal, mail and Jupyter keys, the safety file in a clean `bash -i`, `remote-setup.sh` install/uninstall/status in a temporary `HOME`, and `install-font.sh --dry-run`. Nothing touches the real home directory or the network.
 
 ## Policy
 
-Do not commit private project paths, account names, project environments, or cluster-specific module versions. Put them in `~/.config/hpc/local.sh` or `~/.config/hpc/envs/*.sh` on the cluster.
+Do not commit private paths, account names, project environments or cluster-specific module versions. They belong in `~/.config/hpc/profiles/<cluster>.sh` or `~/.config/zsh/local.zsh`.

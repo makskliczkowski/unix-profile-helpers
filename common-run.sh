@@ -38,44 +38,19 @@ _uph_cpus() {
     fi
 }
 
-# Initialize generic project/run roots and create the backing directories.
+# Initialize the generic run root and create it when needed.
 uph_init_run_roots() {
-    : "${UPH_PROJECT_NAME:=hpc-project}"
-
-    if [ -z "${UPH_SCRATCH_ROOT:-}" ]; then
-        if [ -n "${UPH_SCRATCH_DIR:-}" ]; then
-            UPH_SCRATCH_ROOT="$UPH_SCRATCH_DIR"
+    if [ -z "${HPC_RUN_ROOT:-}" ]; then
+        if [ -n "${HPC_SCRATCH_DIR:-}" ]; then
+            HPC_RUN_ROOT="$HPC_SCRATCH_DIR/runs"
         elif command -v hpc_find_scratch >/dev/null 2>&1; then
-            UPH_SCRATCH_ROOT=$(hpc_find_scratch 2>/dev/null || printf '%s' "$HOME/scratch")
+            HPC_RUN_ROOT=$(hpc_find_scratch 2>/dev/null || printf '%s' "$HOME/scratch")/runs
         else
-            UPH_SCRATCH_ROOT="$HOME/scratch"
+            HPC_RUN_ROOT="$HOME/scratch/runs"
         fi
     fi
-
-    : "${UPH_PROJECT_ROOT:=$UPH_SCRATCH_ROOT/Projects/$UPH_PROJECT_NAME}"
-    : "${UPH_RUN_ROOT:=$UPH_PROJECT_ROOT/runs}"
-    : "${UPH_LOG_ROOT:=$UPH_PROJECT_ROOT/logs}"
-    : "${UPH_TMP_ROOT:=$UPH_PROJECT_ROOT/tmp}"
-    : "${UPH_CACHE_ROOT:=$UPH_PROJECT_ROOT/cache}"
-    : "${UPH_CHECKPOINT_ROOT:=$UPH_PROJECT_ROOT/checkpoints}"
-
-    export UPH_PROJECT_NAME
-    export UPH_SCRATCH_ROOT
-    export UPH_PROJECT_ROOT
-    export UPH_RUN_ROOT
-    export UPH_LOG_ROOT
-    export UPH_TMP_ROOT
-    export UPH_CACHE_ROOT
-    export UPH_CHECKPOINT_ROOT
-
-    mkdir -p \
-        "$UPH_SCRATCH_ROOT" \
-        "$UPH_PROJECT_ROOT" \
-        "$UPH_RUN_ROOT" \
-        "$UPH_LOG_ROOT" \
-        "$UPH_TMP_ROOT" \
-        "$UPH_CACHE_ROOT" \
-        "$UPH_CHECKPOINT_ROOT"
+    export HPC_RUN_ROOT
+    mkdir -p "$HPC_RUN_ROOT" || return 1
 }
 
 uph_run_id() {
@@ -95,7 +70,7 @@ uph_make_run_dir() {
 
     uph_init_run_roots || return 1
 
-    RUN_DIR="$UPH_RUN_ROOT/$1_$(uph_run_id)"
+    RUN_DIR="$HPC_RUN_ROOT/$1_$(uph_run_id)"
     LOG_DIR="$RUN_DIR/logs"
     OUTPUT_DIR="$RUN_DIR/output"
     TMP_DIR="$RUN_DIR/tmp"

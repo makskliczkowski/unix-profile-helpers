@@ -2,14 +2,14 @@
 : "${ZSH:=$HOME/.oh-my-zsh}"
 export ZSH
 
-# Machine-specific values belong here. The deployer creates this file once and
-# preserves it on future updates.
+# Machine-specific values (including UPH_SAFE=0 to disable common-safety.sh)
+# belong here. The deployer creates this file once and preserves it.
 UPH_ZSH_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
 UPH_LOCAL_CONFIG="$UPH_ZSH_CONFIG_DIR/local.zsh"
 [[ -r "$UPH_LOCAL_CONFIG" ]] && source "$UPH_LOCAL_CONFIG"
 
 # Oh My Zsh settings (ignored when Oh My Zsh is not installed).
-: "${ZSH_THEME:=agnoster}"
+: "${ZSH_THEME:=robbyrussell}"
 
 # History and completion tuning.
 HISTFILE="$HOME/.zsh_history"
@@ -21,7 +21,6 @@ setopt EXTENDED_HISTORY
 setopt HIST_EXPIRE_DUPS_FIRST
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_ALL_DUPS
-setopt HIST_IGNORE_SPACE
 setopt HIST_REDUCE_BLANKS
 setopt HIST_SAVE_NO_DUPS
 setopt INTERACTIVE_COMMENTS
@@ -101,24 +100,10 @@ conda() {
     return 127
 }
 
-# Optional QuantumEigenSolver paths. Enable them in local.zsh.
-: "${UPH_ENABLE_SOLVER_PATHS:=false}"
-if [[ "$UPH_ENABLE_SOLVER_PATHS" == true ]]; then
-    : "${QES_ROOT:=$HOME/Codes/QuantumEigenSolver}"
-    : "${QES_PYQUSOLVER_DIR:=$QES_ROOT/pyqusolver}"
-    : "${QES_PYPATH:=$QES_PYQUSOLVER_DIR/Python}"
-    : "${QES_PYPATH_GEN_PYTHON:=$QES_PYPATH/QES/general_python}"
-    : "${QES_SLURMPATH:=$QES_ROOT/slurm}"
-    export QES_ROOT QES_PYQUSOLVER_DIR QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
-else
-    unset QES_ROOT QES_PYQUSOLVER_DIR QES_PYPATH QES_PYPATH_GEN_PYTHON QES_SLURMPATH
-fi
-
 # User-local executables. The unique path array avoids duplicate PATH entries.
 typeset -U path PATH
 
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
-[[ -d "$HOME/.juliaup/bin" ]] && path=("$HOME/.juliaup/bin" $path)
 [[ -d /opt/homebrew/bin ]] && path=(/opt/homebrew/bin $path)
 [[ -d /opt/homebrew/sbin ]] && path=(/opt/homebrew/sbin $path)
 
@@ -142,7 +127,8 @@ export EDITOR
 : "${VISUAL:=$EDITOR}"
 export VISUAL
 
-# Shared aliases and helpers that are easy to reuse on other devices.
-if [[ -r "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh" ]]; then
-    source "$UPH_ZSH_CONFIG_DIR/common-aliases.zsh"
-fi
+# Shared aliases, helpers and safe interactive defaults.
+for UPH_FILE in common-safety.sh common-aliases.zsh; do
+    [[ -r "$UPH_ZSH_CONFIG_DIR/$UPH_FILE" ]] && source "$UPH_ZSH_CONFIG_DIR/$UPH_FILE"
+done
+unset UPH_FILE

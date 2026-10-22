@@ -1,33 +1,17 @@
 # Machine-specific shell settings.
 #
-# The deployer installs this as ~/.config/zsh/local.zsh only when that file
-# does not already exist. Keep private paths and optional plugin choices here.
-# Do not commit credentials or API keys.
+# The deployer installs this as ~/.config/zsh/local.zsh only when that file does
+# not already exist. Keep private paths here and never commit credentials.
 
-# Optional QuantumEigenSolver integration. Leave disabled on other machines.
-# UPH_ENABLE_SOLVER_PATHS=true
-#
-# Override individual solver paths when their layout differs:
-# QES_ROOT="$HOME/path/to/QuantumEigenSolver"
-# QES_PYQUSOLVER_DIR="$QES_ROOT/pyqusolver"
-# QES_PYPATH="$QES_PYQUSOLVER_DIR/Python"
-# QES_PYPATH_GEN_PYTHON="$QES_PYPATH/QES/general_python"
-# QES_SLURMPATH="$QES_ROOT/slurm"
-# UPH_QES_REMOTE="hpc-host:~/path/to/pyqusolver/"
+# Safe interactive defaults (common-safety.sh). Set to 0 to disable.
+# UPH_SAFE=1
+# Default umask is 077 (private files); use 027 to share with your group.
+# UPH_UMASK=077
 
-# Optional Obsidian integration. Leave unset to disable its helpers.
-# export OBSIDIAN_VAULT="$HOME/Documents/PhysicsNotes"
-
-# Optional library locations belong here only on machines that have them.
-# ARMADILLO_INCL_DIR="$HOME/path/to/armadillo/include"
-
-# Optional local HPC login shortcut. This can be an SSH config host or user@host.
-# UPH_HPC_HOST="hpc-host"
-
-# Override the default ~/Codes shortcut.
-# UPH_CODES_DIR="$HOME/src"
-
-# Optional Oh My Zsh customization
+# Oh My Zsh (optional).
 # ZSH="$HOME/.oh-my-zsh"
 # ZSH_THEME="robbyrussell"
 # typeset -ga UPH_EXTRA_PLUGINS=(kubectl)
+
+# Editor override; the default depends on SSH and installed tools.
+# export EDITOR='code --wait'
