@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Print a profile as tab-separated key/base64(value) lines.
-# This is the stable interface consumed by shub and other tools. The shell
+# This is the stable interface consumed by other tools. The shell
 # helpers source profiles directly, so both consumers share one schema.
 set -euo pipefail
 
@@ -33,8 +33,8 @@ for key in $_hpc_profile_arrays; do
     done
 done
 
-# Preserve extension HPC_* keys that are not part of the core schema. shub
-# writes them back when a profile is edited instead of silently dropping them.
+# Preserve extension HPC_* keys that are not part of the core schema, so that
+# tools editing a profile can write them back instead of silently dropping them.
 _known=" $(printf '%s %s %s' "$_hpc_profile_scalars" "$_hpc_profile_arrays" "HPC_PROFILE HPC_PROFILE_FILE HPC_PROFILE_RUN HPC_PROFILE_DIR HPC_PROFILE_AUTOLOAD" | tr '\n' ' ') "
 while IFS= read -r _key; do
     [ -n "$_key" ] || continue

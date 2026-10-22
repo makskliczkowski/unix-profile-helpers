@@ -172,13 +172,13 @@ cp "$HOME/.bashrc" "$tmp/bashrc.orig"
 expect status-initial "$($setup status | grep '^installed=')" installed=no
 out=$($setup install --dry-run --from "$ROOT")
 case $out in dry_run=1*) ;; *) fail "dry-run marker" ;; esac
-cmp -s "$HOME/.bashrc" "$tmp/bashrc.orig" && [ ! -e "$HOME/.config/hpc" ] && [ ! -e "$HOME/.bashrc.shub-backup" ] ||
+cmp -s "$HOME/.bashrc" "$tmp/bashrc.orig" && [ ! -e "$HOME/.config/hpc" ] && [ ! -e "$HOME/.bashrc.uph-backup" ] ||
     fail "install --dry-run wrote something"
 $setup install --from "$ROOT" >/dev/null
 out=$($setup install --from "$ROOT")
 case $out in *block=unchanged*) ;; *) fail "install not idempotent" ;; esac
-expect block-count "$(grep -c '^# >>> sHub(bard) hpc helpers >>>$' "$HOME/.bashrc")" 1
-cmp -s "$HOME/.bashrc.shub-backup" "$tmp/bashrc.orig" || fail "backup differs from original"
+expect block-count "$(grep -c '^# >>> unix-profile-helpers >>>$' "$HOME/.bashrc")" 1
+cmp -s "$HOME/.bashrc.uph-backup" "$tmp/bashrc.orig" || fail "backup differs from original"
 expect status-installed "$($setup status | grep -E '^(installed|up_to_date)=' | tr '\n' ' ')" "installed=yes up_to_date=yes "
 # A clean interactive bash loads the helpers through the block.
 loaded=$(bash --noprofile --norc -i -c '. "$HOME/.bashrc"; type hpcprofile >/dev/null && umask' 2>/dev/null)
@@ -188,7 +188,7 @@ case $out in *block=removed*) ;; *) fail "uninstall block" ;; esac
 diff -q "$HOME/.bashrc" "$tmp/bashrc.orig" >/dev/null || fail "uninstall changed more than the block"
 [ ! -e "$HOME/.config/hpc/common-slurm.sh" ] || fail "uninstall left files"
 expect status-final "$($setup status | grep '^installed=')" installed=no
-printf '# >>> sHub(bard) hpc helpers >>>\n' >> "$HOME/.bashrc"
+printf '# >>> unix-profile-helpers >>>\n' >> "$HOME/.bashrc"
 $setup install --from "$ROOT" >/dev/null 2>&1 && fail "install accepted an unbalanced block"
 
 # ---- install-font.sh -------------------------------------------------------------

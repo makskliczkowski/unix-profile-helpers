@@ -1,6 +1,6 @@
 # Unix Profile Helpers
 
-Portable shell helpers for Linux and macOS workstations and for Slurm login nodes. Cluster choices live in declarative `HPC_*` profile files, which the shell helpers and `shub` (GUI and TUI) read through the same loader. The shared files contain no site-specific values.
+Portable shell helpers for Linux and macOS workstations and for Slurm login nodes. Cluster choices live in declarative `HPC_*` profile files, which the shell helpers and external tools read through the same loader. The shared files contain no site-specific values.
 
 ## Files
 
@@ -13,7 +13,7 @@ Portable shell helpers for Linux and macOS workstations and for Slurm login node
 - `deploy.sh`: local install and, optionally, remote install.
 - `scripts/remote-setup.sh`: install, remove or inspect the helpers on a login node.
 - `scripts/install-font.sh`: install a monospace terminal font for the current user.
-- `scripts/profile-dump.sh`: serializer used by `shub`; emits `KEY<TAB>base64(value)`, array keys repeated.
+- `scripts/profile-dump.sh`: serializer for external tools; emits `KEY<TAB>base64(value)`, array keys repeated.
 - `scripts/validate-hpc-helpers.sh`: syntax checks and smoke tests.
 
 ## Quick start
@@ -58,24 +58,24 @@ Scalars:
 | `HPC_SCRATCH_DIR`, `HPC_QUOTA_GROUP` | Scratch location and quota group for the storage helpers. |
 | `HPC_SHELL`, `HPC_WORKDIR`, `HPC_PYTHON` | Interactive shell, remote working directory, Python executable. |
 | `HPC_JUPYTER_CMD`, `HPC_JUPYTER_IP`, `HPC_JUPYTER_PORT` | Jupyter command (`jupyter lab`), bind address (`0.0.0.0`), preferred port (`0` picks a free one). |
-| `HPC_TERM_BASHRC` | `true` (default) or `false`: whether a shub terminal sources `~/.bashrc`. |
+| `HPC_TERM_BASHRC` | `true` (default) or `false`: whether a terminal started by an external tool sources `~/.bashrc`. |
 
-Arrays: `HPC_SSH_OPTIONS`, `HPC_SLURM_EXTRA` (raw `sbatch` options), `HPC_ENV_MODULES`, `HPC_ENV_SOURCE` (files sourced after modules and conda), `HPC_ENV_VARS` (`KEY=VALUE`), `HPC_ENV_PRE` (commands), `HPC_JUPYTER_EXTRA`, `HPC_TERM_SOURCE` (extra files sourced at shub terminal start).
+Arrays: `HPC_SSH_OPTIONS`, `HPC_SLURM_EXTRA` (raw `sbatch` options), `HPC_ENV_MODULES`, `HPC_ENV_SOURCE` (files sourced after modules and conda), `HPC_ENV_VARS` (`KEY=VALUE`), `HPC_ENV_PRE` (commands), `HPC_JUPYTER_EXTRA`, `HPC_TERM_SOURCE` (extra files sourced at terminal start).
 
 ### What is exported
 
 Loading a profile sets the `HPC_*` values as plain shell variables, which are enough for the functions in the same shell and are not visible to child processes. Only `HPC_PROFILE` and `HPC_PROFILE_RUN` are exported, so that a child shell selects the same profile and run preset. Account names, paths and other values therefore never leak into unrelated programs.
 
-Entries of `HPC_ENV_VARS` are exported only by `hpc_env_apply`, which the shub terminal, a job script or the user calls explicitly. Sourcing a helper file never does it. The function runs in the current shell in this order: `HPC_ENV_INIT`, `module purge`, modules, conda, `HPC_ENV_SOURCE` files, `HPC_ENV_VARS`, `HPC_ENV_PRE`. It stops at the first failing step. Each `HPC_ENV_VARS` entry is `KEY=VALUE` and is exported with its value quoted, so values with spaces work. A leading `~`, `$VAR` and `${VAR}` expand; command substitution and arithmetic do not, so a profile value cannot run code through this path. `HPC_ENV_SOURCE` paths get the same expansion. `HPC_ENV_INIT` and `HPC_ENV_PRE` are shell code by design.
+Entries of `HPC_ENV_VARS` are exported only by `hpc_env_apply`, which an external terminal launcher, a job script or the user calls explicitly. Sourcing a helper file never does it. The function runs in the current shell in this order: `HPC_ENV_INIT`, `module purge`, modules, conda, `HPC_ENV_SOURCE` files, `HPC_ENV_VARS`, `HPC_ENV_PRE`. It stops at the first failing step. Each `HPC_ENV_VARS` entry is `KEY=VALUE` and is exported with its value quoted, so values with spaces work. A leading `~`, `$VAR` and `${VAR}` expand; command substitution and arithmetic do not, so a profile value cannot run code through this path. `HPC_ENV_SOURCE` paths get the same expansion. `HPC_ENV_INIT` and `HPC_ENV_PRE` are shell code by design.
 
 ## Remote helpers
 
 `scripts/remote-setup.sh` installs the Bash-compatible subset (`common-profile.sh`, `common-slurm.sh`, `common-run.sh`, `common-safety.sh`) into `~/.config/hpc/` and keeps one marked block in `~/.bashrc`:
 
 ```text
-# >>> sHub(bard) hpc helpers >>>
+# >>> unix-profile-helpers >>>
 ...
-# <<< sHub(bard) hpc helpers <<<
+# <<< unix-profile-helpers <<<
 ```
 
 ```bash
@@ -84,7 +84,7 @@ scripts/remote-setup.sh uninstall [--dry-run]
 scripts/remote-setup.sh status    [--from DIR]
 ```
 
-`install` is idempotent; a re-run replaces the block in place. Before the first change `~/.bashrc` is copied once to `~/.bashrc.shub-backup`. `uninstall` removes exactly that block and the four files, and leaves profiles, the backup and the rest of `~/.bashrc` alone. It refuses to edit a `~/.bashrc` whose block markers are unbalanced. `--dry-run` writes nothing. `--from DIR` names the directory holding the source files (default: the repository), which allows streaming to a temporary directory on the login node, as `deploy.sh` does:
+`install` is idempotent; a re-run replaces the block in place. Before the first change `~/.bashrc` is copied once to `~/.bashrc.uph-backup`. `uninstall` removes exactly that block and the four files, and leaves profiles, the backup and the rest of `~/.bashrc` alone. It refuses to edit a `~/.bashrc` whose block markers are unbalanced. `--dry-run` writes nothing. `--from DIR` names the directory holding the source files (default: the repository), which allows streaming to a temporary directory on the login node, as `deploy.sh` does:
 
 ```bash
 tar -C unix-profile-helpers -cf - common-*.sh scripts/remote-setup.sh |
@@ -93,7 +93,7 @@ tar -C unix-profile-helpers -cf - common-*.sh scripts/remote-setup.sh |
 
 Every command prints one `key=value` per line. `status` reports `dir`, `bashrc`, `block` (`present`/`absent`), `backup`, `file.<name>` (`present`/`missing`), `installed` (`yes`/`partial`/`no`) and `up_to_date` (`yes`/`no`/`unknown`, comparing against `--from`). `install` and `uninstall` report `block`, `backup` and `file.<name>` outcomes, preceded by `dry_run=1` in a dry run.
 
-`./deploy.sh --remote-only` asks for an SSH address, optionally authorizes your public key, and runs the installer this way. Cluster profiles are not copied; create them in `~/.config/hpc/profiles/` on the remote account or through shub.
+`./deploy.sh --remote-only` asks for an SSH address, optionally authorizes your public key, and runs the installer this way. Cluster profiles are not copied; create them in `~/.config/hpc/profiles/` on the remote account or with an external tool.
 
 ## Safety defaults
 

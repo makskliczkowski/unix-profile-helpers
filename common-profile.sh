@@ -1,4 +1,4 @@
-# Declarative HPC profiles shared by the shell helpers and shub.
+# Declarative HPC profiles shared by the shell helpers and external tools.
 # Source from Bash or Zsh. A profile is a shell fragment containing assignments
 # only; it must not run commands when sourced.
 #

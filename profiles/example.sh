@@ -37,7 +37,7 @@ HPC_ENV_CONDA=""
 HPC_ENV_MODULES=("Python/3.11.3" "CUDA/12.1")
 # Files to source after the modules, for example a virtualenv or conda init.
 HPC_ENV_SOURCE=()
-# KEY=VALUE, exported only by hpc_env_apply or shub terminal startup. $VAR,
+# KEY=VALUE, exported only by hpc_env_apply. $VAR,
 # ${VAR} and a leading ~ expand; command substitution does not.
 HPC_ENV_VARS=("OMP_NUM_THREADS=8")
 HPC_ENV_PRE=()
@@ -47,7 +47,7 @@ HPC_ENV_PRE=()
 # HPC_QUOTA_GROUP="project-account"
 # HPC_SHELL="/bin/bash"
 
-# Defaults used by shub and the shell helpers. Use "~" for the remote home;
+# Defaults used by the shell helpers. Use "~" for the remote home;
 # "$HOME" here would expand to the local home when the profile is read.
 HPC_WORKDIR="~"
 HPC_PYTHON="python3"
@@ -56,7 +56,7 @@ HPC_JUPYTER_EXTRA=("--ServerApp.open_browser=False")
 # HPC_JUPYTER_IP="0.0.0.0"         # bind address on the compute node
 # HPC_JUPYTER_PORT="0"             # 0 picks a free port
 
-# shub terminal: whether it sources ~/.bashrc (default true), and extra files
+# Terminal: whether it sources ~/.bashrc (default true), and extra files
 # sourced after the environment is applied.
 # HPC_TERM_BASHRC="true"
 # HPC_TERM_SOURCE=("~/.config/hpc/extra.sh")

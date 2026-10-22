@@ -7,19 +7,19 @@
 # common-safety.sh from DIR (default: the repository) to ~/.config/hpc/ and
 # keeps ONE marked block in ~/.bashrc that sources them. It is idempotent: a
 # re-run replaces the block in place. ~/.bashrc is copied once to
-# ~/.bashrc.shub-backup before the first change. uninstall removes exactly that
+# ~/.bashrc.uph-backup before the first change. uninstall removes exactly that
 # block and those files; profiles, the backup and the rest of ~/.bashrc stay.
 # --dry-run reports the same key=value lines without writing anything.
 # Output is one key=value per line so that a caller can parse it.
 # Needs only sh, sed, awk, cmp, grep and cp; no sudo.
 set -eu
 
-start='# >>> sHub(bard) hpc helpers >>>'
-end='# <<< sHub(bard) hpc helpers <<<'
+start='# >>> unix-profile-helpers >>>'
+end='# <<< unix-profile-helpers <<<'
 files="common-profile.sh common-slurm.sh common-run.sh common-safety.sh"
 dest=$HOME/.config/hpc
 bashrc=$HOME/.bashrc
-backup=$HOME/.bashrc.shub-backup
+backup=$HOME/.bashrc.uph-backup
 
 usage() { echo "usage: remote-setup.sh install|uninstall|status [--dry-run] [--from DIR]" >&2; exit 2; }
 
@@ -51,7 +51,7 @@ if [ -e "$bashrc" ]; then
     nend=$(grep -cxF "$end" "$bashrc" || true)
 fi
 [ "$nstart" = "$nend" ] && [ "$nstart" -le 1 ] ||
-    die "$bashrc has an unbalanced or duplicated sHub(bard) block; fix it by hand"
+    die "$bashrc has an unbalanced or duplicated unix-profile-helpers block; fix it by hand"
 
 # Write $1 to ~/.bashrc, after a one-time backup of the original.
 write_bashrc() {
